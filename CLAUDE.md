@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working in this
 
 ## プロジェクト概要
 
-日本語技術ドキュメント（Markdown）を管理するリポジトリ。記事は `vibecoding/`
+日本語技術ドキュメント（Markdown）を管理するリポジトリ。記事は `articles/`
 配下にテーマ別ディレクトリで整理される。
 
 ## コマンド

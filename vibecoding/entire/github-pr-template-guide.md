@@ -2,7 +2,7 @@
 
 ## pull_request_template.md完全ガイド
 
-GitHubでPRを作るとき、毎回同じ説明を書いていませんか？
+GitHubでPRを作るとき、毎回同じ説明を書いていませんか。
 
 実は、PRテンプレートは簡単に作れます。
 
@@ -12,9 +12,7 @@ GitHubでPRを作るとき、毎回同じ説明を書いていませんか？
 
 PR作成時に自動で表示されるMarkdownファイルです。
 
-ファイル名：
-
-.github/pull_request_template.md
+ファイル名は `.github/pull_request_template.md` です。
 
 ---
 
@@ -22,17 +20,25 @@ PR作成時に自動で表示されるMarkdownファイルです。
 
 ### 1. ディレクトリを作成
 
-リポジトリのルートで：
+リポジトリのルートで以下を実行します。
 
-    mkdir .github
+```bash
+mkdir .github
+```
 
 ### 2. ファイル作成
 
-    touch .github/pull_request_template.md
+```bash
+touch .github/pull_request_template.md
+```
 
-最終構成：
+最終構成は以下のとおりです。
 
-repo-root/ ├── .github/ │ └── pull_request_template.md
+```text
+repo-root/
+├── .github/
+│   └── pull_request_template.md
+```
 
 ---
 
@@ -64,27 +70,21 @@ GitHub側の設定は不要です。
 
 ## なぜAI開発で重要なのか
 
-AIがコードを書く時代では
+AIがコードを書く時代では、以下を確認する必要があります。
 
-- 変更内容（diff）だけでなく
+- 変更内容（diff）
 - 変更理由（AIセッション）
 
-を確認する必要があります。
-
-PRテンプレートにAIログ欄を作ることで、 レビューの質が大きく向上します。
+PRテンプレートにAIログ欄を作ることで、レビューの質が大きく向上します。
 
 ---
 
 ## まとめ
 
-PRテンプレートは
+PRテンプレートは以下に役立ちます。
 
 - チーム開発の標準化
 - レビュー効率化
 - AI開発のトレーサビリティ確保
 
-に役立ちます。
-
-AI監査の背景についてはこちら：
-
-→ AIがコードを書く時代、Gitだけでは監査できない
+AI監査の背景については「AIがコードを書く時代、Gitだけでは監査できない」を参照してください。

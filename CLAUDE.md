@@ -1,10 +1,11 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working in this repository.
 
 ## プロジェクト概要
 
-日本語技術ドキュメント（Markdown）を管理するリポジトリ。記事は `vibecoding/` 配下にテーマ別ディレクトリで整理される。
+日本語技術ドキュメント（Markdown）を管理するリポジトリ。記事は `vibecoding/`
+配下にテーマ別ディレクトリで整理される。
 
 ## コマンド
 
@@ -18,13 +19,15 @@ npm run lint:text     # textlint で日本語文章校正
 
 ## Lint ルール
 
-- **markdownlint**: `.markdownlint-cli2.yaml` で設定。MD013（行長制限）・MD033（HTML許可）・MD041（先頭見出し必須）は無効化
+- **markdownlint**: `.markdownlint-cli2.yaml`
+  で設定。MD013（行長制限）・MD033（HTML許可）・MD041（先頭見出し必須）は無効化
 - **Prettier**: `.prettierrc.json` で `proseWrap: always`, `printWidth: 100`
-- **textlint**: `preset-ja-technical-writing` プリセットを使用。日本語技術文書向けの文章校正ルール
+- **textlint**: `preset-ja-technical-writing` プリセットを使用。日本語の技術文書向け文章校正ルール
 
 ## CI
 
-`.github/workflows/docs.yml` により PR と main ブランチ push 時に `fmt --check` と `lint` が実行される。
+`.github/workflows/docs.yml` により PR・main ブランチの push 時に `fmt --check` と `lint`
+が実行される。
 
 ## 記事を書く際の注意
 

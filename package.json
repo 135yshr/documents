@@ -1,0 +1,30 @@
+{
+  "name": "documents",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "fmt": "prettier -w \"**/*.md\"",
+    "lint": "markdownlint-cli2 \"**/*.md\"",
+    "lint:fix": "markdownlint-cli2 --fix \"**/*.md\"",
+    "lint:text": "textlint \"**/*.md\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/135yshr/documents.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/135yshr/documents/issues"
+  },
+  "homepage": "https://github.com/135yshr/documents#readme",
+  "devDependencies": {
+    "markdownlint-cli2": "^0.21.0",
+    "prettier": "^3.8.1",
+    "textlint": "^15.5.2",
+    "textlint-rule-preset-ja-technical-writing": "^12.0.2"
+  }
+}

@@ -35,11 +35,19 @@ npx zenn preview      # ローカルプレビュー（localhost:8000）
 
 - 記事の作成は `npx zenn new:article` を使用する（スラッグが自動生成される）
 - スラッグは `a-z0-9`・ハイフン・アンダースコアで 12〜50 文字
-- フロントマターの必須項目: `title`, `emoji`(1 文字), `type`(tech/idea), `topics`(配列), `published`
+- フロントマターの必須項目: `title` / `emoji`(1 文字) / `type`(tech/idea) / `topics`(配列) /
+  `published`
 - Prettier の `proseWrap: always`（printWidth: 100）に従い、自動折り返しされる前提で記述する
 - MD041（1 行目見出し必須）は無効化されている（フロントマターが先頭のため）
 - デプロイを回避したい場合はコミットメッセージに `[ci skip]` を付ける
 - Node.js 24.14.0（`.node-version`）
+
+## Git Hooks
+
+- **husky v9**: `.husky/pre-commit` で lint-staged を実行
+- **lint-staged**: ステージされた `.md`
+  ファイルに対して Prettier 整形、markdownlint、textlint を順に実行
+- `npm install` 時に `prepare` スクリプト経由で husky が自動セットアップされる
 
 ## 作業ルール
 

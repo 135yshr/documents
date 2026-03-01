@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "2c5a9e4f2954",
+  "strategy": "manual-commit",
+  "branch": "replace-todo-with-experiments",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/978121945958ed.md",
+    "articles/f14c01658cd157.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2c/5a9e4f2954/0/metadata.json",
+      "transcript": "/2c/5a9e4f2954/0/full.jsonl",
+      "context": "/2c/5a9e4f2954/0/context.md",
+      "content_hash": "/2c/5a9e4f2954/0/content_hash.txt",
+      "prompt": "/2c/5a9e4f2954/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2075,
+    "cache_creation_tokens": 463750,
+    "cache_read_tokens": 33523708,
+    "output_tokens": 111705,
+    "api_call_count": 312
+  }
+}

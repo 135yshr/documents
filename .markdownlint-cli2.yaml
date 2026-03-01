@@ -7,4 +7,5 @@ config:
   # 日本語記事では邪魔になるルールをOFF
   MD013: false # 行長制限
   MD033: false # HTML許可
+  MD036: false # 太字をサブタイトルとして使用するため
   MD041: false # 1行目見出し必須（Zennはメタデータが先頭）

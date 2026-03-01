@@ -3,7 +3,7 @@ title: "AI時代のコードレビューはなぜ機能しなくなるのか"
 emoji: "🔎"
 type: "tech"
 topics: ["AI", "CodeReview", "LLM", "VibeCoding"]
-published: true
+published: false
 ---
 
 ## 問題

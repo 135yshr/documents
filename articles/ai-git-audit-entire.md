@@ -3,7 +3,7 @@ title: "AIがコードを書く時代、Gitだけでは監査できない"
 emoji: "📋"
 type: "tech"
 topics: ["AI", "Git", "Audit", "VibeCoding"]
-published: true
+published: false
 ---
 
 ## Claude Code + Entire で「なぜこのコードが生まれたか」を追跡する

@@ -15,6 +15,8 @@ npm run fmt -- --check # 整形チェック（CIと同じ）
 npm run lint          # markdownlint-cli2 で構文チェック
 npm run lint:fix      # markdownlint-cli2 で自動修正
 npm run lint:text     # textlint で日本語文章校正
+npx zenn new:article  # 新規記事を作成（スラッグ自動生成）
+npx zenn preview      # ローカルプレビュー（localhost:8000）
 ```
 
 ## Lint ルール
@@ -31,8 +33,12 @@ npm run lint:text     # textlint で日本語文章校正
 
 ## 記事を書く際の注意
 
+- 記事の作成は `npx zenn new:article` を使用する（スラッグが自動生成される）
+- スラッグは `a-z0-9`・ハイフン・アンダースコアで 12〜50 文字
+- フロントマターの必須項目: `title`, `emoji`(1 文字), `type`(tech/idea), `topics`(配列), `published`
 - Prettier の `proseWrap: always`（printWidth: 100）に従い、自動折り返しされる前提で記述する
-- Zenn 等のフロントマター付き記事を想定し、MD041（1行目見出し必須）は無効化されている
+- MD041（1 行目見出し必須）は無効化されている（フロントマターが先頭のため）
+- デプロイを回避したい場合はコミットメッセージに `[ci skip]` を付ける
 - Node.js 24.14.0（`.node-version`）
 
 ## 作業ルール
@@ -40,3 +46,5 @@ npm run lint:text     # textlint で日本語文章校正
 - コンフリクト解消時は、作業ブランチの変更を正とする。main 側の変更を優先する場合は明示的に指示すること
 - main / master へのマージ・プッシュは、必ずユーザーの明示的な承認を得てから実行する
 - 指示が曖昧な場合は推測で行動せず、意図を確認する
+- 新しい記事を作成する際は、フロントマターの `published` を必ず
+  `false`（下書き状態）にする。公開はユーザーが明示的に指示した場合のみ `true` に変更する

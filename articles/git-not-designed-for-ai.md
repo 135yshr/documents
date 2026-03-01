@@ -3,7 +3,7 @@ title: "GitはAI開発を想定していない"
 emoji: "⚠️"
 type: "tech"
 topics: ["AI", "Git", "VibeCoding"]
-published: true
+published: false
 ---
 
 ## 変更履歴と意思決定履歴の違い

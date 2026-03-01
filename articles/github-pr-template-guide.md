@@ -3,7 +3,7 @@ title: "GitHubのPRテンプレートを0から作る方法"
 emoji: "📝"
 type: "tech"
 topics: ["GitHub", "PullRequest", "Template", "VibeCoding"]
-published: true
+published: false
 ---
 
 ## pull_request_template.md完全ガイド

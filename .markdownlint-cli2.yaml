@@ -1,3 +1,6 @@
+ignores:
+  - "node_modules/**"
+
 config:
   default: true
 
@@ -5,6 +8,3 @@ config:
   MD013: false # 行長制限
   MD033: false # HTML許可
   MD041: false # 1行目見出し必須（Zennはメタデータが先頭）
-
-ignores:
-  - node_modules

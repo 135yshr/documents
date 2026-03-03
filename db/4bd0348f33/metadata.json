@@ -3,7 +3,7 @@
   "checkpoint_id": "db4bd0348f33",
   "strategy": "manual-commit",
   "branch": "add-security-vulnerability-articles",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     "articles/4076334bb8cb54.md",
     "articles/92042eacfbdde3.md"
@@ -15,13 +15,20 @@
       "context": "/db/4bd0348f33/0/context.md",
       "content_hash": "/db/4bd0348f33/0/content_hash.txt",
       "prompt": "/db/4bd0348f33/0/prompt.txt"
+    },
+    {
+      "metadata": "/db/4bd0348f33/1/metadata.json",
+      "transcript": "/db/4bd0348f33/1/full.jsonl",
+      "context": "/db/4bd0348f33/1/context.md",
+      "content_hash": "/db/4bd0348f33/1/content_hash.txt",
+      "prompt": "/db/4bd0348f33/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 7,
-    "cache_creation_tokens": 7683,
-    "cache_read_tokens": 717537,
-    "output_tokens": 3703,
-    "api_call_count": 5
+    "input_tokens": 24,
+    "cache_creation_tokens": 114679,
+    "cache_read_tokens": 1671426,
+    "output_tokens": 29172,
+    "api_call_count": 17
   }
 }

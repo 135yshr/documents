@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "0b2073410494",
+  "strategy": "manual-commit",
+  "branch": "add-security-vulnerability-articles",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "articles/4076334bb8cb54.md",
+    "articles/7c5d99d5f45ed7.md",
+    "articles/8471b2d4bdc9d3.md",
+    "articles/c10431f5afd26d.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0b/2073410494/0/metadata.json",
+      "transcript": "/0b/2073410494/0/full.jsonl",
+      "context": "/0b/2073410494/0/context.md",
+      "content_hash": "/0b/2073410494/0/content_hash.txt",
+      "prompt": "/0b/2073410494/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 55,
+    "cache_creation_tokens": 41955,
+    "cache_read_tokens": 5892161,
+    "output_tokens": 12171,
+    "api_call_count": 49
+  }
+}

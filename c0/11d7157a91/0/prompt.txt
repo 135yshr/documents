@@ -1,0 +1,143 @@
+次に公開すると良い資料を教えてください
+
+---
+
+AIがコードを書く時代、Gitだけでは監査できないの記事にTODOコメントはありますか？
+
+---
+
+公開してください
+
+---
+
+Entire のUIがあったほうが伝わりやすいという意見をもらったのですがどんなUIがあるといいでしょうか？
+
+---
+
+https://entire.io/ にアクセスして、適切なUIのスクリーンショットを作成し、設定してください。
+ログイン情報は、僕が入力します。
+
+use chrome-devtools
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+create pr
+
+---
+
+ブランチ `add-security-vulnerability-articles`
+  に、セキュリティ脆弱性パターンの5記事シリーズが下書きとして追加されています（PR #11）。
+
+  以下の作業を行ってください。
+
+  ## 1. 記事の内容レビューと改善
+
+  5つの記事それぞれを読み、以下の観点でレビュー・修正してください。
+
+  - 技術的な正確性（コード例が正しいか、攻撃シナリオの説明が妥当か）
+  - 文章の読みやすさ・流れの自然さ
+  - 各記事が独立して読めるか（シリーズの他記事を前提としていないか）
+  - 「Go で書かれたコード生成ツール」という説明で一貫しているか（Meow 言語の詳細に踏み込んでいないか）
+  - 想定読者（Go 中級〜上級手前、CI/CD 設定経験あり）に適切な難易度か
+
+  ### 記事一覧
+
+  | # | ファイル | タイトル |
+  |---|---------|---------|
+  | 1 | `articles/7c5d99d5f45ed7.md` | GitHub Actions の ${{ }}
+  はスクリプトインジェクションの温床になる |
+  | 2 | `articles/c10431f5afd26d.md` | fmt.Sprintf で go.mod を生成するとインジェクションされる |
+  | 3 | `articles/8471b2d4bdc9d3.md` | 正規表現に外部文字列を埋め込むとき QuoteMeta を忘れていませんか
+  |
+  | 4 | `articles/92042eacfbdde3.md` | セキュリティレビューで「修正しない」と判断する基準 |
+  | 5 | `articles/4076334bb8cb54.md` | 脆弱性レビューで「安全」と判断できた2つのケースと多層防御の話 |
+
+  ## 2. lint 通過確認
+
+  修正後、以下をすべて通過させてください。
+
+  ```bash
+  npm run fmt       # Prettier
+  npm run lint      # markdownlint
+  npm run lint:text # textlint
+
+  3. プレビュー確認
+
+  npx zenn preview を実行し、各記事のレンダリングに問題がないか確認してください（コードブロックの表示、
+  テーブルの崩れ、リンク切れなど）。
+
+  4. コミット & プッシュ
+
+  修正があればコミットして add-security-vulnerability-articles ブランチにプッシュしてください。
+
+---
+
+[Request interrupted by user]
+
+---
+
+ごめんなさい。途中で止めてしまいました。続きを実行してください

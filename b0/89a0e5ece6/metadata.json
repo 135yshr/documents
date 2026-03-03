@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "b089a0e5ece6",
+  "strategy": "manual-commit",
+  "branch": "publish/ai-generated-code-tracking",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "articles/978121945958ed.md",
+    "images/978121945958ed/entire-checkpoints.png",
+    "images/978121945958ed/entire-dashboard.png",
+    "images/978121945958ed/entire-session-detail.png"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b0/89a0e5ece6/0/metadata.json",
+      "transcript": "/b0/89a0e5ece6/0/full.jsonl",
+      "context": "/b0/89a0e5ece6/0/context.md",
+      "content_hash": "/b0/89a0e5ece6/0/content_hash.txt",
+      "prompt": "/b0/89a0e5ece6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 102113,
+    "cache_read_tokens": 2873762,
+    "output_tokens": 9186,
+    "api_call_count": 40
+  }
+}

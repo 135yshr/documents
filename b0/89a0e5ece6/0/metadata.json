@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "b089a0e5ece6",
+  "session_id": "008d0ecf-0046-4993-ba13-6370601ece23",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-03T05:46:26.053014Z",
+  "branch": "publish/ai-generated-code-tracking",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "articles/978121945958ed.md",
+    "images/978121945958ed/entire-checkpoints.png",
+    "images/978121945958ed/entire-dashboard.png",
+    "images/978121945958ed/entire-session-detail.png"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "ea406756e33c",
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 102113,
+    "cache_read_tokens": 2873762,
+    "output_tokens": 9186,
+    "api_call_count": 40
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-03T05:46:25.852327Z",
+    "agent_lines": 10,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 10,
+    "agent_percentage": 100
+  }
+}

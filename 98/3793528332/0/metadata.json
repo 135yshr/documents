@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "983793528332",
+  "session_id": "008d0ecf-0046-4993-ba13-6370601ece23",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-03T12:32:38.318956Z",
+  "branch": "add-security-vulnerability-articles",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/978121945958ed.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "124246999e92",
+  "token_usage": {
+    "input_tokens": 135,
+    "cache_creation_tokens": 284294,
+    "cache_read_tokens": 11349400,
+    "output_tokens": 23659,
+    "api_call_count": 102
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-03T12:32:38.060668Z",
+    "agent_lines": 0,
+    "human_added": 66,
+    "human_modified": 14,
+    "human_removed": 0,
+    "total_committed": 66,
+    "agent_percentage": 0
+  }
+}

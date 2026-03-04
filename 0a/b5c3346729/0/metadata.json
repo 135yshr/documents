@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "0ab5c3346729",
+  "session_id": "66fc6ec7-4b9d-4499-a769-fef41d1ba69f",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-04T11:43:49.814961Z",
+  "branch": "article/meow-series-introduction",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/9eca22f9322c40.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "a4e1b8864fc6",
+  "checkpoint_transcript_start": 209,
+  "transcript_lines_at_start": 209,
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 8794,
+    "cache_read_tokens": 887838,
+    "output_tokens": 2062,
+    "api_call_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-04T11:43:49.724114Z",
+    "agent_lines": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2,
+    "agent_percentage": 100
+  }
+}

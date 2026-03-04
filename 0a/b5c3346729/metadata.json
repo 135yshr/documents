@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "0ab5c3346729",
+  "strategy": "manual-commit",
+  "branch": "article/meow-series-introduction",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/9eca22f9322c40.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0a/b5c3346729/0/metadata.json",
+      "transcript": "/0a/b5c3346729/0/full.jsonl",
+      "context": "/0a/b5c3346729/0/context.md",
+      "content_hash": "/0a/b5c3346729/0/content_hash.txt",
+      "prompt": "/0a/b5c3346729/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 8794,
+    "cache_read_tokens": 887838,
+    "output_tokens": 2062,
+    "api_call_count": 9
+  }
+}

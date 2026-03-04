@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "3411a5e38ddc",
+  "session_id": "95881294-2e1a-49db-b826-057204fe33b6",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-04T01:38:26.475661Z",
+  "branch": "publish/pr-template-article",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/499cd6335b5fa6.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "95a476be39a6",
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 7419,
+    "cache_read_tokens": 306045,
+    "output_tokens": 1067,
+    "api_call_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-04T01:38:26.457084Z",
+    "agent_lines": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1,
+    "agent_percentage": 100
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "21d1cb9a4679",
+  "strategy": "manual-commit",
+  "branch": "add-tmux-dev-environment-guide",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/1b7eb1a3fc3787.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/21/d1cb9a4679/0/metadata.json",
+      "transcript": "/21/d1cb9a4679/0/full.jsonl",
+      "context": "/21/d1cb9a4679/0/context.md",
+      "content_hash": "/21/d1cb9a4679/0/content_hash.txt",
+      "prompt": "/21/d1cb9a4679/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 31,
+    "cache_creation_tokens": 58457,
+    "cache_read_tokens": 1335271,
+    "output_tokens": 13321,
+    "api_call_count": 26
+  }
+}

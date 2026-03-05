@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "6efbdb3d99a3",
+  "strategy": "manual-commit",
+  "branch": "publish/go-mod-injection-article",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/c10431f5afd26d.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6e/fbdb3d99a3/0/metadata.json",
+      "transcript": "/6e/fbdb3d99a3/0/full.jsonl",
+      "context": "/6e/fbdb3d99a3/0/context.md",
+      "content_hash": "/6e/fbdb3d99a3/0/content_hash.txt",
+      "prompt": "/6e/fbdb3d99a3/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 19412,
+    "cache_read_tokens": 997236,
+    "output_tokens": 2524,
+    "api_call_count": 11
+  }
+}

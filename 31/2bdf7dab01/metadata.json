@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "312bdf7dab01",
+  "strategy": "manual-commit",
+  "branch": "publish/github-actions-script-injection",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/31/2bdf7dab01/0/metadata.json",
+      "transcript": "/31/2bdf7dab01/0/full.jsonl",
+      "context": "/31/2bdf7dab01/0/context.md",
+      "content_hash": "/31/2bdf7dab01/0/content_hash.txt",
+      "prompt": "/31/2bdf7dab01/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 216,
+    "cache_creation_tokens": 373090,
+    "cache_read_tokens": 19091278,
+    "output_tokens": 46302,
+    "api_call_count": 170
+  }
+}

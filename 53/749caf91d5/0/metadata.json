@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "53749caf91d5",
+  "session_id": "f29fe898-474b-4988-9242-e379c255aad7",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-05T03:30:55.412558Z",
+  "branch": "publish/go-mod-injection-article",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/c10431f5afd26d.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "d4792ac80fcb",
+  "checkpoint_transcript_start": 197,
+  "transcript_lines_at_start": 197,
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 4395,
+    "cache_read_tokens": 605560,
+    "output_tokens": 1423,
+    "api_call_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-05T03:30:55.343449Z",
+    "agent_lines": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2,
+    "agent_percentage": 100
+  }
+}

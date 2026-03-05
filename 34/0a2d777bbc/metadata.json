@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "340a2d777bbc",
+  "strategy": "manual-commit",
+  "branch": "chore/upgrade-zenn-cli-0.4.6",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "package-lock.json",
+    "package.json"
+  ],
+  "sessions": [
+    {
+      "metadata": "/34/0a2d777bbc/0/metadata.json",
+      "transcript": "/34/0a2d777bbc/0/full.jsonl",
+      "context": "/34/0a2d777bbc/0/context.md",
+      "content_hash": "/34/0a2d777bbc/0/content_hash.txt",
+      "prompt": "/34/0a2d777bbc/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 5,
+    "cache_creation_tokens": 19430,
+    "cache_read_tokens": 50574,
+    "output_tokens": 682,
+    "api_call_count": 4
+  }
+}

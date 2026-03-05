@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "dd0d4db60879",
+  "session_id": "08fc0b70-024d-46b6-b6c6-0eb958dd581a",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-05T23:32:53.656124Z",
+  "branch": "fix/update-script-injection-article-title",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/7c5d99d5f45ed7.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "e06d7c7fe2b3",
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 21554,
+    "cache_read_tokens": 183437,
+    "output_tokens": 1380,
+    "api_call_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-05T23:32:53.634635Z",
+    "agent_lines": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1,
+    "agent_percentage": 100
+  }
+}

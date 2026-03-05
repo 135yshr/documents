@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "dd0d4db60879",
+  "strategy": "manual-commit",
+  "branch": "fix/update-script-injection-article-title",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/7c5d99d5f45ed7.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/dd/0d4db60879/0/metadata.json",
+      "transcript": "/dd/0d4db60879/0/full.jsonl",
+      "context": "/dd/0d4db60879/0/context.md",
+      "content_hash": "/dd/0d4db60879/0/content_hash.txt",
+      "prompt": "/dd/0d4db60879/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 21554,
+    "cache_read_tokens": 183437,
+    "output_tokens": 1380,
+    "api_call_count": 12
+  }
+}

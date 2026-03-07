@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "c6faf26eb6df",
+  "strategy": "manual-commit",
+  "branch": "publish/quotemeta-article",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "CLAUDE.md",
+    "articles/8471b2d4bdc9d3.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c6/faf26eb6df/0/metadata.json",
+      "transcript": "/c6/faf26eb6df/0/full.jsonl",
+      "context": "/c6/faf26eb6df/0/context.md",
+      "content_hash": "/c6/faf26eb6df/0/content_hash.txt",
+      "prompt": "/c6/faf26eb6df/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 4159,
+    "cache_read_tokens": 588268,
+    "output_tokens": 975,
+    "api_call_count": 9
+  }
+}

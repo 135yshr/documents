@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "89f48bc2d60a",
+  "strategy": "manual-commit",
+  "branch": "article/ddd-cqrs-misconceptions",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".markdownlint-cli2.yaml",
+    "articles/9e3ec9a7d52c98.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/89/f48bc2d60a/0/metadata.json",
+      "transcript": "/89/f48bc2d60a/0/full.jsonl",
+      "context": "/89/f48bc2d60a/0/context.md",
+      "content_hash": "/89/f48bc2d60a/0/content_hash.txt",
+      "prompt": "/89/f48bc2d60a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  }
+}

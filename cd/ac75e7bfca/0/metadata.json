@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "cdac75e7bfca",
+  "session_id": "4fd0ef18-7579-4e26-8f6b-d5a5cb2e2cd0",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-07T00:22:39.478069Z",
+  "branch": "publish/quotemeta-article",
+  "checkpoints_count": 6,
+  "files_touched": [
+    ".textlintrc.json",
+    "CLAUDE.md",
+    "articles/4076334bb8cb54.md",
+    "articles/7c5d99d5f45ed7.md",
+    "articles/8471b2d4bdc9d3.md",
+    "articles/92042eacfbdde3.md",
+    "articles/c10431f5afd26d.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "a9321485a3ba",
+  "checkpoint_transcript_start": 313,
+  "transcript_lines_at_start": 313,
+  "token_usage": {
+    "input_tokens": 43,
+    "cache_creation_tokens": 28053,
+    "cache_read_tokens": 2260149,
+    "output_tokens": 5053,
+    "api_call_count": 26
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-07T00:22:39.307124Z",
+    "agent_lines": 11,
+    "human_added": 0,
+    "human_modified": 5,
+    "human_removed": 0,
+    "total_committed": 16,
+    "agent_percentage": 68.75
+  }
+}

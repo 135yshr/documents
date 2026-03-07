@@ -8,4 +8,6 @@ config:
   MD013: false # 行長制限
   MD033: false # HTML許可
   MD036: false # 太字をサブタイトルとして使用するため
+  MD010: # ハードタブ
+    code_blocks: false # Goのコードブロックではタブが標準
   MD041: false # 1行目見出し必須（Zennはメタデータが先頭）

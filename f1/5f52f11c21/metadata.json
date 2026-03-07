@@ -3,7 +3,7 @@
   "checkpoint_id": "f15f52f11c21",
   "strategy": "manual-commit",
   "branch": "article/ddd-cqrs-misconceptions",
-  "checkpoints_count": 0,
+  "checkpoints_count": 2,
   "files_touched": [
     "articles/9e3ec9a7d52c98.md"
   ],
@@ -14,13 +14,20 @@
       "context": "/f1/5f52f11c21/0/context.md",
       "content_hash": "/f1/5f52f11c21/0/content_hash.txt",
       "prompt": "/f1/5f52f11c21/0/prompt.txt"
+    },
+    {
+      "metadata": "/f1/5f52f11c21/1/metadata.json",
+      "transcript": "/f1/5f52f11c21/1/full.jsonl",
+      "context": "/f1/5f52f11c21/1/context.md",
+      "content_hash": "/f1/5f52f11c21/1/content_hash.txt",
+      "prompt": "/f1/5f52f11c21/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 0,
-    "cache_creation_tokens": 0,
-    "cache_read_tokens": 0,
-    "output_tokens": 0,
-    "api_call_count": 0
+    "input_tokens": 47,
+    "cache_creation_tokens": 69222,
+    "cache_read_tokens": 1209669,
+    "output_tokens": 10597,
+    "api_call_count": 32
   }
 }

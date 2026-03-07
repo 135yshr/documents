@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "9f8d622f83e6",
+  "session_id": "1639555b-97b9-4487-bab1-eb4a9e3c4205",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-07T23:23:48.749124Z",
+  "branch": "article/ddd-cqrs-misconceptions",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/4076334bb8cb54.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "994d6bc5553d",
+  "token_usage": {
+    "input_tokens": 53,
+    "cache_creation_tokens": 38705,
+    "cache_read_tokens": 1026893,
+    "output_tokens": 6077,
+    "api_call_count": 35
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-07T23:23:48.715076Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 1,
+    "agent_percentage": 0
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "3213b1aaa8cc",
+  "strategy": "manual-commit",
+  "branch": "feat/ddd-clean-architecture-articles",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md",
+    "articles/56e161aff29ff9.md",
+    "articles/5de289f64ec515.md",
+    "articles/f2027369b648cc.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/32/13b1aaa8cc/0/metadata.json",
+      "transcript": "/32/13b1aaa8cc/0/full.jsonl",
+      "context": "/32/13b1aaa8cc/0/context.md",
+      "content_hash": "/32/13b1aaa8cc/0/content_hash.txt",
+      "prompt": "/32/13b1aaa8cc/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 68,
+    "cache_creation_tokens": 107724,
+    "cache_read_tokens": 4067201,
+    "output_tokens": 23265,
+    "api_call_count": 48
+  }
+}

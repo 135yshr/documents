@@ -1,0 +1,1902 @@
+次の記事を作成しようと思いますが、DDDやクリーンアーキテクチャーの記事で良さそうなものを書きたいです。
+どんなテーマが良いと思いますか？
+
+---
+
+[Request interrupted by user]
+
+---
+
+次の記事を作成しようと思いますが、DDDやクリーンアーキテクチャーの記事で良さそうなものを書きたいです。
+どんなテーマが良いと思いますか？
+
+既に
+
+---
+
+[Request interrupted by user]
+
+---
+
+次の記事を作成しようと思いますが、DDDやクリーンアーキテクチャーの記事で良さそうなものを書きたいです。
+どんなテーマが良いと思いますか？
+
+既に作成したプログラムやzennでDDDの記事を分析して良さそうなテーマを20個作成してください
+
+---
+
+issueに登録してください
+
+---
+
+公開するのに進めの順番をもう一度教えてください
+
+---
+
+最初の３本を作成してください
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+ に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+３本全てレビューしてください
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+はい
+
+---
+
+Goでクリーンアーキテクチャを導入するとinterfaceが爆発する問題への処方箋は、僕が実装しているサービスを元に考えたものですか？
+
+---
+
+/Users/135yshr/go/src/github.com/SecureCycle や /Users/135yshr/go/src/github.com/SecureCycle/135yshr にクリーンアーキテクチャーを採用したプロジェクトがあります。
+
+もう一度分析した上で記事を見直してください。
+大筋いい記事なのですが、実体験を伴わないと読み手からの質問に回答できないです
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+書き直す前にあなたと議論して少し僕の知識を整理する時間をください
+
+---
+
+僕は、Go Proverb流のことを知りませんでした。なので今のような設計になっています。
+記事の中でいう教科書通りの設計です。僕はGo言語の思想が好きでこの言語を使っています。
+なので、僕が作ったプロジェクトの設計を見直してGoの考え方を取り入れていきたいと考えています。
+
+そこで質問なのですが、どのように改善すべきだとあなたは考えますか？エビデンスとともに意見をください
+
+---
+
+僕も３がいいと思っていました。
+記事の中にサンプルコードが必要だともいますが、参照したコード（publicのリポジトリを除く）は会社のものなので、記事にするときは、実際のコードを使わないでください。
+これは、ルールに必須の条件として追加してください
+
+---
+
+３本とも書き直してください
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user wanted to create DDD/Clean Architecture articles for their Zenn tech blog. The workflow was:
+   - Generate 20 article theme ideas based on analysis of existing articles and Zenn trends
+   - Register all themes as GitHub issues with a tracking label
+   - Create the first 3 articles in recommended publication order
+   - Review and lint all articles
+   - Commit and create PR
+   - **Critical pivot**: User revealed the articles should be grounded in their actual Go project experience at SecureCycle (private repos), not generic best practices
+   - User wanted to discuss and learn about Go's interface philosophy before rewriting
+   - Final direction agreed: "教科書通りに作った → Go の思想で見直した" (Built by textbook → Reviewed with Go philosophy)
+   - All sample code must be original - never use private repository code directly
+   - Rewrite all 3 articles with this new direction
+
+2. Key Technical Concepts:
+   - Go implicit interfaces ("Accept interfaces, return structs")
+   - Go Proverbs ("The bigger the interface, the weaker the abstraction")
+   - Ports & Adapters / Hexagonal Architecture (user's current design)
+   - Input Ports vs Output Ports vs Repository interfaces
+   - Interface Segregation Principle (ISP)
+   - Consumer-side interface definition (Go idiom)
+   - CodedError pattern (error code + HTTP status + sentinel error)
+   - Sentinel errors in domain layer
+   - Infrastructure-to-domain error translation at Repository boundary
+   - uber-go/dig dependency injection
+   - Multi-tenant database access (TenantDBManager)
+   - Interactor pattern (UseCase implementation)
+   - CQRS-like Reader/Writer repository separation
+   - Compile-time interface check: `var _ Interface = (*Impl)(nil)`
+
+3. Files and Code Sections:
+   - **CLAUDE.md** (`/Users/135yshr/projects/135yshr/documents/CLAUDE.md`)
+     - Added mandatory rule about code originality in articles
+     - New rule: "記事のコード例は必ずオリジナルのサンプルコードを使用する。業務プロジェクト（private リポジトリ）のコードをそのまま、または一部改変して掲載してはならない。設計パターンや構造を参考にすることは可だが、変数名・型名・ディレクトリ構成等はすべて記事用に書き下ろすこと"
+
+   - **articles/f2027369b648cc.md** (Interface explosion article - REWRITTEN)
+     - Story: "教科書通りのPorts & Adapters → Go思想で見直し"
+     - 処方箋1: Input Port廃止、利用側でinterface定義
+     - 処方箋2: Output Portは残す（実装差し替え実績がある場合）
+     - 処方箋3: Repository を Reader/Writer に分離
+     - 処方箋4: ディレクトリ構成整理（port/input/廃止）
+     - Uses fictional task analysis domain for all examples
+
+   - **articles/56e161aff29ff9.md** (Error handling article - REWRITTEN)
+     - Story: "sentinel errorだけで開始 → Handler層if文爆発 → CodedError導入"
+     - CodedError pattern with error codes (VAL001, CONF001, AUTH001, etc.)
+     - Nuanced view on infra→domain error translation (boundary translation is OK, business judgment is not)
+     - Domain layer keeps sentinel errors, Interactor converts to CodedError
+
+   - **articles/5de289f64ec515.md** (UseCase layer article - REWRITTEN)
+     - Story: "パススルーUseCaseは無駄？ → 運用で考えを改めた"
+     - Complete reversal: UseCase layer is ALWAYS worth having
+     - Shows evolution: pass-through → idempotency checks → exclusive control → multi-strategy orchestration
+     - Interactor complexity spectrum (low to high)
+
+   - **GitHub Issues**: #50-#69 (20 article themes), #70 (overview tracking issue)
+     - Label: "DDD/CA連載" (color: #1D76DB)
+     - All assigned to 135yshr
+
+   - **PR #71**: `feat/ddd-clean-architecture-articles` branch
+     - Contains the original (pre-rewrite) versions of 3 articles
+     - Current branch still has uncommitted rewrites
+
+   - **SecureCycle projects analyzed** (research only, no modifications):
+     - `/Users/135yshr/go/src/github.com/SecureCycle/ai-monitoring-backend-go` - Main project with strict Clean Architecture
+     - `/Users/135yshr/go/src/github.com/SecureCycle/ai-soc-auth` - Auth service (simpler, service layer)
+     - `/Users/135yshr/go/src/github.com/SecureCycle/ai-soc-flagd` - Feature flag service
+
+4. Errors and fixes:
+   - **textlint errors on initial article creation**:
+     - "？" disallowed → Changed question marks in headings to statements
+     - "かも" weak expression → Removed "かもしれない" phrases
+     - Doubled particles (助詞重複: "に"×2, "が"×2) → Restructured sentences
+     - Sentence length > 100 chars → Split long sentences
+     - These were fixed across multiple rounds of edits
+   - **markdownlint MD029 error**: Ordered list prefix mismatch (2., 3. instead of 1., 1.) → Changed to 1., 1., 1. style
+   - **Write tool error**: "File has not been read yet" → Had to Read files first before Write
+   - **Critical feedback from user**: Articles were not based on actual implementation experience. User said "実体験を伴わないと読み手からの質問に回答できないです" → Led to complete project analysis and article rewrite
+
+5. Problem Solving:
+   - Solved the fundamental problem of articles lacking authenticity by analyzing the user's actual SecureCycle Go projects
+   - Identified 3 key divergences between articles and actual code (interface placement, error translation, UseCase necessity)
+   - Through discussion, discovered user wanted to learn Go philosophy and improve their design
+   - Agreed on article direction that combines both perspectives (textbook → Go philosophy)
+   - Added CLAUDE.md rule to prevent future use of private code in articles
+
+6. All user messages:
+   - "次の記事を作成しようと思いますが、DDDやクリーンアーキテクチャーの記事で良さそうなものを書きたいです。どんなテーマが良いと思いますか？既に作成したプログラムやzennでDDDの記事を分析して良さそうなテーマを20個作成してください"
+   - "issueに登録してください"
+   - "公開するのに進めの順番をもう一度教えてください"
+   - "最初の３本を作成してください"
+   - (invoked /review-doc)
+   - "３本全てレビューしてください"
+   - (invoked /commit)
+   - "はい" (to push and create PR)
+   - "Goでクリーンアーキテクチャを導入するとinterfaceが爆発する問題への処方箋は、僕が実装しているサービスを元に考えたものですか？"
+   - "/Users/135yshr/go/src/github.com/SecureCycle や /Users/135yshr/go/src/github.com/SecureCycle/135yshr にクリーンアーキテクチャーを採用したプロジェクトがあります。もう一度分析した上で記事を見直してください。大筋いい記事なのですが、実体験を伴わないと読み手からの質問に回答できないです"
+   - "書き直す前にあなたと議論して少し僕の知識を整理する時間をください"
+   - "僕は、Go Proverb流のことを知りませんでした。なので今のような設計になっています。記事の中でいう教科書通りの設計です。僕はGo言語の思想が好きでこの言語を使っています。なので、僕が作ったプロジェクトの設計を見直してGoの考え方を取り入れていきたいと考えています。そこで質問なのですが、どのように改善すべきだとあなたは考えますか？エビデンスとともに意見をください"
+   - "僕も３がいいと思っていました。記事の中にサンプルコードが必要だともいますが、参照したコード（publicのリポジトリを除く）は会社のものなので、記事にするときは、実際のコードを使わないでください。これは、ルールに必須の条件として追加してください"
+   - "３本とも書き直してください"
+
+7. Pending Tasks:
+   - Run lint (prettier, markdownlint, textlint) on all 3 rewritten articles
+   - Fix any lint errors found
+   - Run document review (/review-doc) on rewritten articles
+   - Commit the rewritten articles
+   - Push and update PR #71
+
+8. Current Work:
+   Just completed rewriting all 3 articles with the new direction ("教科書通り → Go思想で見直し"). All 3 Write operations succeeded:
+   - `articles/f2027369b648cc.md` - Rewritten with Ports & Adapters → consumer-side interfaces story
+   - `articles/56e161aff29ff9.md` - Rewritten with sentinel errors → CodedError evolution story
+   - `articles/5de289f64ec515.md` - Rewritten with "UseCase is always worth having" perspective
+   
+   The files have been written but NOT yet linted or committed. The branch `feat/ddd-clean-architecture-articles` has the old versions committed and pushed to PR #71.
+
+9. Optional Next Step:
+   Run lint checks on all 3 rewritten articles (`npm run fmt`, `npm run lint`, `npm run lint:text`) and fix any errors. This directly follows the article rewrite that the user requested with "３本とも書き直してください". The previous workflow after writing articles was: format → lint → textlint → fix errors → review → commit.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/6a6be09e-7381-4751-bcd0-8c94593d4332.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/f2027369b648cc.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/56e161aff29ff9.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/5de289f64ec515.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+<bash-input>git push</bash-input>
+
+---
+
+<bash-stdout>[entire] Pushing session logs to origin...
+To github.com:135yshr/documents.git
+   f41e7b3..6852370  feat/ddd-clean-architecture-articles -> feat/ddd-clean-architecture-articles</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+記事の内容を詳しく確認します。いくつかの引用や技術的な主張を検証します。記事を詳しく検証しました。全体的によくまとまっていますが、**1つの明確な誤りと、1つの注意点**が見つかりました。
+
+---
+
+## 検証結果
+
+### ❌ 誤り：引用の誤帰属（ズレ3の箇所）
+
+記事にはこう書かれています：
+
+> Don't define interfaces before they are used.  
+> — Jack Lindamood, Preemptive Interface Anti-Pattern in Go
+
+**この引用の帰属が間違っています。**
+
+「Don't define interfaces before they are used」は Jack Lindamood の記事にある言葉ではなく、**Go公式の Go Code Review Comments** に記載されている文言です（"Do not define interfaces before they are used"）。
+
+Jack Lindamood の「Preemptive Interface Anti-Pattern in Go」という記事は確かに存在し、同じ概念（preemptive interface はアンチパターン）を扱っていますが、彼の記事における代表的なルールは：
+
+> **A great rule of thumb for Go is accept interfaces, return structs.**  
+> — Jack Lindamood
+
+です。「Don't define interfaces before...」という言葉は Go Code Review Comments に帰属させるべきです。
+
+---
+
+### ✅ 正確だった主な内容
+
+| 検証項目 | 結果 |
+|---|---|
+| Go Code Review Comments の引用（「Go interfaces generally belong in...」） | ✓ 正確 |
+| Rob Pike の Go Proverbs「The bigger the interface, the weaker the abstraction」 | ✓ 正確 |
+| 標準ライブラリの interface メソッド数一覧（io.Reader=1, sort.Interface=3 等） | ✓ 正確 |
+| `var _ Interface = (*Impl)(nil)` パターンの説明 | ✓ 正確 |
+| 参考文献一覧（Clean Architecture 2017年、Alistair Cockburn 等） | ✓ 正確 |
+| io.Reader は利用側（ioパッケージ）で定義され、os.File はその存在を知らない | ✓ 正確 |
+
+---
+
+### 修正案
+
+ズレ3のセクションを以下のように修正することをお勧めします：
+
+```
+Don't define interfaces before they are used.
+— Go Code Review Comments（Go Wiki）
+```
+
+または、Jack Lindamood の名前を使いたい場合は引用文を変更して：
+
+```
+A great rule of thumb for Go is accept interfaces, return structs.
+— Jack Lindamood, Preemptive Interface Anti-Pattern in Go
+```
+
+---
+
+<bash-input>git push</bash-input>
+
+---
+
+<bash-stdout>[entire] Pushing session logs to origin...
+To github.com:135yshr/documents.git
+   6852370..f73dcab  feat/ddd-clean-architecture-articles -> feat/ddd-clean-architecture-articles</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+両記事を読み比べました。前回の記事（Goのinterface設計）で提唱していた原則が、CQRSの記事でいくつか活かしきれていない箇所があります。具体的に3点お伝えします。
+
+---
+
+## 改善提案
+
+### 1. RepositoryをReader/Writerに分離する（前記事の処方箋3と直接対応）
+
+前の記事では「Repositoryが太い」ことを問題として処方箋を提示していましたが、この記事の `domain/order/repository.go` は分離されていません。
+
+**現在のコード:**
+```go
+type Repository interface {
+    FindByID(ctx context.Context, id OrderID) (*Order, error)
+    Save(ctx context.Context, order *Order) error
+}
+```
+
+**前記事の原則を適用した改善案:**
+```go
+// domain/order/repository.go
+type OrderReader interface {
+    FindByID(ctx context.Context, id OrderID) (*Order, error)
+}
+
+type OrderWriter interface {
+    Save(ctx context.Context, order *Order) error
+}
+```
+
+するとUseCaseの依存が最小化されます:
+- `PlaceOrderUseCase` → `OrderWriter` のみに依存（Findは不要）
+- `CancelOrderUseCase` → `OrderReader` + `OrderWriter` に依存
+
+これは「The bigger the interface, the weaker the abstraction」の実践例として、この記事のコードサンプル内で示せる機会です。
+
+---
+
+### 2. Presentation層でUseCaseのinterfaceを定義する（前記事の処方箋1と対応）
+
+前の記事で最も効果が大きいとしていた「利用側でinterfaceを定義する」が、この記事のHandlerには適用されていません。
+
+**改善案（Presentation層のhandler.go）:**
+```go
+// presentation/order/handler.go
+
+// Handlerが必要なメソッドだけinterfaceとして定義する（前記事の原則）
+type orderListFetcher interface {
+    Execute(ctx context.Context) ([]apporder.OrderListDTO, error)
+}
+type orderPlacer interface {
+    Execute(ctx context.Context, input apporder.PlaceOrderInput) error
+}
+
+type OrderHandler struct {
+    lister orderListFetcher
+    placer orderPlacer
+}
+```
+
+UseCase側はinterfaceを定義せずstructを公開するだけで済み、前の記事と設計思想が一貫します。前記事との対応関係が明示されていると、2記事を読んでいる読者にとって「なるほど、Handler層でも同じ原則が使える」と腑に落ちやすくなります。
+
+---
+
+### 3. 「QueryServiceのinterfaceを利用側で定義する」という選択肢の補足
+
+現在の記事では `application/order/query_service.go` に `OrderQueryService` インターフェースを置いていますが、前の記事の「処方箋2（Output Port精査）」の考え方と連動させると、こう説明できます：
+
+| 条件 | 方針 |
+|---|---|
+| 1つのUseCaseしか使わない | そのUseCase内でprivate interfaceとして定義 |
+| 複数のUseCaseが共有する | `query_service.go` として共有interfaceにする |
+
+`FindAll` と `FindByID` が別々のUseCaseから呼ばれる場合は現在の共有interfaceが適切ですが、この判断基準を記事内に明示すると、前の記事の処方箋2と整合性が取れます。
+
+---
+
+## まとめ
+
+| 改善点 | 前記事との対応 |
+|---|---|
+| Repositoryを Reader/Writer に分離 | 処方箋3 |
+| HandlerでUseCaseのinterfaceを定義 | 処方箋1 |
+| QueryServiceのinterface配置の判断基準を明示 | 処方箋2 |
+
+特に**1つ目（Repository分離）**はコードサンプルを少し変えるだけで実装でき、かつ2つの記事を通読している読者へ「原則の一貫した適用」を示せるので、効果が高いと思います。
+
+---
+
+<bash-input>git push</bash-input>
+
+---
+
+<bash-stdout>[entire] Pushing session logs to origin...
+To github.com:135yshr/documents.git
+   f73dcab..e57f487  feat/ddd-clean-architecture-articles -> feat/ddd-clean-architecture-articles</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+Goでクリーンアーキテクチャを導入するとinterfaceが爆発する問題への処方箋を修正したのですか？
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+ に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+このリポジトリで追加・更新したファイルを対象にしてください
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/56e161aff29ff9.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/5de289f64ec515.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/f2027369b648cc.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+articles/9e3ec9a7d52c98.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+よくある反論への回答だとちょっと言葉が強めなのでもう少し柔らかい表現に変更してください
+
+---
+
+DIはプロジェクトによりけりなので、DIの使用・未使用に関わらず読んだ人が採用できるようにしてください
+
+---
+
+# ドキュメントレビュー
+
+引数で指定された Markdown 記事ファイルの文章品質をレビューし、問題を指摘したうえで自動修正する。
+
+## 入力
+
+@articles/f2027369b648cc.md に対象ファイルのパスが渡される（例: `articles/978121945958ed.md`）。パスが渡されない場合は「対象ファイルを指定してください（例: /review-doc articles/xxx.md）」とだけ返して終了すること。
+
+## レビュー手順
+
+### Step 1: 記事を読み込む
+
+対象ファイルを Read ツールで全文読み込むこと。
+
+### Step 2: 以下の 4 観点でレビューする
+
+#### 観点 A: 冗長・繰り返し
+
+- 同じ主張が複数箇所で繰り返されていないか
+- 削れる前置き・つなぎ表現はないか（「〜がある。それは〜である。」のような回りくどい表現）
+- 1 文が長すぎないか（目安: 80 文字超は分割を検討）
+
+#### 観点 B: 論理構成・流れ
+
+- セクション間の論理的なつながりが自然か
+- 見出し階層が適切か（h2 → h3 の飛び越しがないか）
+- 結論が導入の問いに対応しているか
+
+#### 観点 C: 読者価値密度
+
+- 各セクションに具体例・数値・コード例など「読んで良かった」と思える情報があるか
+- 抽象的な主張だけで終わっているセクションはないか
+- 読者が次のアクションを取れる情報が含まれているか
+
+#### 観点 D: 文体の統一
+
+- 記事全体が敬語（ですます調）で統一されているか
+- 箇条書き内で「である」調が混在していないか
+- 見出し直下の地の文とリスト項目で文体が揺れていないか
+
+### Step 3: 指摘を出力する
+
+以下のフォーマットで指摘を一覧表示すること。
+
+```markdown
+## レビュー結果: <ファイル名>
+
+### 観点 A: 冗長・繰り返し
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 B: 論理構成・流れ
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 C: 読者価値密度
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 観点 D: 文体の統一
+
+- [ ] L<行番号>: <指摘内容>（<改善案の要約>）
+
+### 総評
+
+<全体の品質に関する 2〜3 行のコメント>
+```
+
+指摘がない観点は「問題なし」とだけ記載すること。
+
+### Step 4: 自動修正を適用する
+
+指摘のうち、意味を変えずに改善できるもの（冗長表現の削除、文の分割など）は Edit ツールで自動修正すること。修正を適用したら、修正箇所のサマリーを出力すること。
+
+内容の追加や構成の大幅な変更が必要な指摘は、修正案を提示するにとどめ、自動修正しないこと。
+
+### Step 5: lint を実行する
+
+修正後に以下を順に実行し、エラーがあれば修正すること。
+
+```bash
+npx prettier --write <対象ファイル>
+npx markdownlint-cli2 <対象ファイル>
+npx textlint <対象ファイル>
+```
+
+## 制約
+
+- フロントマター（title, emoji, topics, published など）は変更しないこと
+- 技術用語・固有名詞はそのまま残すこと
+- 修正は最小限にとどめ、筆者の文体を尊重すること
+- published の値は変更しないこと
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+<bash-input>git psuh</bash-input>
+
+---
+
+<bash-stdout></bash-stdout><bash-stderr>git: 'psuh' is not a git command. See 'git --help'.
+
+The most similar command is
+	push
+</bash-stderr>
+
+---
+
+<bash-input>git push</bash-input>
+
+---
+
+<bash-stdout>[entire] Pushing session logs to origin...
+To github.com:135yshr/documents.git
+   e57f487..77df833  feat/ddd-clean-architecture-articles -> feat/ddd-clean-architecture-articles</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+UseCase層は本当に必要か〜Goでのクリーンアーキテクチャ最小構成〜への指摘がありました。
+記事の内容はすでに前の会話で確認済みなので、その内容をベースに批判的視点から分析します。
+
+---
+
+## 批判的な視点からの指摘候補
+
+### 1. サバイバーシップバイアス（最も強い指摘）
+
+記事の中心的な主張「パススルーのまま残ったInteractorはほとんどなかった」は、筆者の特定プロジェクト（分析・バッチ処理が中心）の経験のみに基づいています。
+
+批判者はこう言えます：「それはあなたのプロジェクトがたまたま複雑化したからであって、シンプルなCRUD中心のアプリなら一生パススルーのままかもしれない。複雑化した事例しか語られておらず、シンプルのまま終わった反例が示されていない」
+
+---
+
+### 2. YAGNIへの反論が論理的に弱い
+
+記事はYAGNIに対して「アーキテクチャの一貫性のためにパススルーは許容できる」と答えていますが、YAGNIの本質的な反論になっていません。
+
+YAGNIの立場からはこう言えます：「一貫性のためなら、複雑化したときに追加すれば良い。Goのimplicit interfaceとリファクタリングツールがあれば、後からInteractor層を差し込むコストは低い。今あえてパススルー層を作るのは、まさしくYAGNI違反そのものだ」
+
+---
+
+### 3. 「依存の方向が崩れる」という主張への反論余地
+
+記事では「HandlerからRepositoryを直接呼ぶとDomain層に直接依存する」と書いていますが、これは設計の工夫で解消できます。
+
+```
+// HandlerがRepositoryインターフェースに依存する設計（依存方向は保てる）
+type jobFinder interface {
+    FindByID(ctx context.Context, id string) (*model.Job, error)
+}
+type JobHandler struct {
+    repo jobFinder  // ← Handler側でinterfaceを定義すれば依存逆転は成立する
+}
+```
+
+批判者から「UseCase層がなくても依存の方向は崩れない。それはあなたの設計問題であってUseCase層の必要性の根拠にはならない」と言われる余地があります。
+
+---
+
+### 4. 参考文献にVertical Slice Architectureを入れているのに、主張と矛盾している
+
+記事の参考文献にJimmy BogardのVertical Slice Architectureが載っています。しかしVSAは「機能ごとにスライスして考え、水平な層を強制しない」という思想であり、「全機能に統一してUseCase層を持つ」という本記事の主張とは真逆の方向性です。
+
+なぜVSAを引用したのか理由の説明がなく、批判者から「VSAを引用しておいてVSAと相反する結論を出している」と突っ込まれる可能性があります。
+
+---
+
+### 5. 冪等性チェックはInteractor層の責務か？という問い
+
+`AnalyzeTaskInteractor`の例で、冪等性チェック（既に分析済みかどうか）をInteractor層に入れています。批判者からは「冪等性はドメインの関心事であってDomain層に書くべきでは？」という指摘が来る可能性があります。逆に「アプリケーション層の関心事で正しい」とする立場もあり、どちらが正解かの説明が記事中にありません。
+
+---
+
+### 6. 「テストが面倒にならない」の説明が不十分
+
+テストの例としてHandlerのモックを示していますが、Interactor自体のユニットテストについての言及がありません。パススルーInteractorのテストは薄くなりがちで、「テストファイルの数が増えるコスト」や「何もしないテストの価値」については触れられていません。
+
+---
+
+### まとめ
+
+| 指摘 | 強度 |
+|---|---|
+| サバイバーシップバイアス（経験則の一般化） | ⭐⭐⭐ 強い |
+| YAGNI反論が弱い（後から追加できる） | ⭐⭐⭐ 強い |
+| 依存方向の崩れはInterface設計で防げる | ⭐⭐ 中程度 |
+| VSA引用と主張の矛盾 | ⭐⭐ 中程度 |
+| 冪等性チェックの層の帰属が不明確 | ⭐ 軽微 |
+| Interactor自体のテストコストに未言及 | ⭐ 軽微 |
+
+特に**最初の2つ**（サバイバーシップバイアスとYAGNIへの反論の弱さ）は、読者から「具体的な数値や反例なしに経験則で断言している」と批判されやすいポイントです。「パススルーのまま終わったケース」や「後からInteractor層を追加したときのリファクタリングコスト」についての補足があると、主張の説得力が増すと思います。
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user is building a series of DDD/Clean Architecture articles for their Zenn tech blog, grounded in their actual Go project experience (SecureCycle). The articles were already rewritten in a previous session. In this session, the workflow has been: lint → review → fix → commit → push, followed by iterative improvements based on technical verification and critical feedback. The user wants articles that are technically accurate, use soft/empathetic tone in FAQ sections, are DI-agnostic (not tied to DIコンテナ), and can withstand critical scrutiny from experienced readers.
+
+2. Key Technical Concepts:
+   - Go implicit interfaces ("Accept interfaces, return structs")
+   - Go Proverbs ("The bigger the interface, the weaker the abstraction")
+   - Consumer-side interface definition (Go idiom)
+   - Ports & Adapters / Hexagonal Architecture
+   - Input Ports vs Output Ports vs Repository interfaces
+   - Repository Reader/Writer separation (ISP)
+   - CodedError pattern (error code + HTTP status + sentinel error)
+   - CQRS (Command Query Responsibility Segregation)
+   - CQS principle (Bertrand Meyer)
+   - Interactor/UseCase pattern
+   - `var _ Interface = (*Impl)(nil)` compile-time check
+   - uber-go/dig dependency injection
+   - Manual DI vs DI container patterns
+   - YAGNI principle
+   - Vertical Slice Architecture (referenced but in tension with article's conclusion)
+   - Survivorship bias in experience-based arguments
+   - Idempotency as application-level vs domain-level concern
+
+3. Files and Code Sections:
+   - **articles/f2027369b648cc.md** (Interface explosion article)
+     - Rewritten with "教科書通りのPorts & Adapters → Go思想で見直し" story
+     - Fixed misattributed quote: changed from "Don't define interfaces before they are used" (Go Wiki) to Jack Lindamood's actual quote "A great rule of thumb for Go is accept interfaces, return structs"
+     - Softened FAQ section heading: "よくある反論への回答" → "よくある疑問と私の考え"
+     - Generalized DI section to cover both manual DI and DIコンテナ:
+     ```go
+     // 手動DI：main.go や provider.go での初期化
+     interactor := usecase.NewAnalyzeTaskInteractor(repo, classifier)
+     handler := handler.NewTaskHandler(interactor) // structを渡す
+     ```
+     - Multiple textlint fixes (doubled particles, tense consistency)
+
+   - **articles/56e161aff29ff9.md** (Error handling article)
+     - Rewritten with sentinel errors → CodedError evolution story
+     - Minor wording fixes: "if文の分岐が" → "これにより、if文の分岐が", "やるべき" → "行うべき"
+     - All reviews passed with no remaining issues
+
+   - **articles/5de289f64ec515.md** (UseCase layer article)
+     - Rewritten with "パススルーUseCase → 運用で成長" perspective
+     - Softened FAQ section: heading change + empathetic phrasing
+     - **Currently being modified** to address critical feedback:
+       - Rewrote "理由3" to acknowledge Handler-side interface can maintain dependency inversion, reframed as hiding domain model details:
+       ```go
+       // Interactor層なしでも依存方向は保てる
+       type jobFinder interface {
+           FindByID(ctx context.Context, id string) (*model.Job, error)
+       }
+       type JobHandler struct {
+           repo jobFinder
+       }
+       ```
+       - Added idempotency layer attribution note: "アプリケーション固有のフロー制御であり、Interactor層が適切だと判断しました"
+       - Strengthened YAGNI rebuttal with cross-cutting concern example (認可チェック全機能追加)
+       - Acknowledged survivorship bias: "CRUD中心のシンプルなアプリケーションなら、パススルーのまま残るInteractorが多い可能性もあります"
+
+   - **articles/9e3ec9a7d52c98.md** (CQRS article, published: true)
+     - Added Repository Reader/Writer split (OrderReader/OrderWriter)
+     - Added Presentation layer code sample with consumer-side interfaces
+     - Added QueryService interface placement criteria table
+     - Split 2 long sentences in review
+     - PlaceOrderUseCase now depends on `order.OrderWriter` only
+
+   - **CLAUDE.md**
+     - Added code originality rule (fixed textlint error: "することは可だ" → "の参考は可だ")
+
+4. Errors and fixes:
+   - **textlint: max-comma error** (f2027369b648cc.md L19): Too many commas → Restructured sentence
+   - **textlint: doubled particles** (multiple files): "か"×2, "が"×2, "に"×2, "は"×2 → Restructured sentences
+   - **textlint: sentence-length** (56e161aff29ff9.md): 106/112 chars → Split sentences or shortened
+   - **textlint: ja-no-weak-phrase** (5de289f64ec515.md): "思います" → Changed to "でしょう"
+   - **textlint: successive-word** (f2027369b648cc.md): "……" doubled → Changed to single "…"
+   - **textlint: ja-no-redundant-expression** (CLAUDE.md): "することは可だ" → "の参考は可だ"
+   - **textlint: no-doubled-joshi "でも"×2** (f2027369b648cc.md): "手動DIでもDIコンテナでも" → "手動DI・DIコンテナのどちらでも"
+   - **textlint: no-doubled-joshi "に"×2** (f2027369b648cc.md): "最初に気になった" → "最初に悩んだ"
+   - **Misattributed quote**: "Don't define interfaces before they are used" wrongly attributed to Jack Lindamood → Fixed to his actual quote
+   - **User feedback on tone**: "よくある反論への回答だとちょっと言葉が強め" → Changed heading and added empathetic phrasing throughout
+   - **User feedback on DI**: "DIはプロジェクトによりけりなので" → Added manual DI example alongside DIコンテナ example
+   - **User forwarded critical feedback**: 6 points of criticism on UseCase article → Started addressing strongest points
+
+5. Problem Solving:
+   - Solved lint errors iteratively across multiple rounds
+   - Aligned CQRS article with interface article's design principles (3 improvements)
+   - Addressed quote attribution accuracy issue
+   - Iteratively softened assertive FAQ tone based on user feedback
+   - Generalized DI guidance for broader audience
+   - Currently addressing critical feedback on UseCase article (survivorship bias, weak YAGNI rebuttal, dependency direction argument, VSA contradiction, idempotency attribution, test cost)
+
+6. All user messages:
+   - (Implicit from context resumption: continue from where previous session left off)
+   - "Goでクリーンアーキテクチャを導入するとinterfaceが爆発する問題への処方箋を修正したのですか？"
+   - "このリポジトリで追加・更新したファイルを対象にしてください" (for /review-doc)
+   - "よくある反論への回答だとちょっと言葉が強めなのでもう少し柔らかい表現に変更してください"
+   - "DIはプロジェクトによりけりなので、DIの使用・未使用に関わらず読んだ人が採用できるようにしてください"
+   - "/review-doc @articles/f2027369b648cc.md"
+   - "/commit"
+   - Critical feedback on UseCase article (6 detailed points with severity ratings, forwarded as user message with analysis of survivorship bias, weak YAGNI rebuttal, dependency direction, VSA contradiction, idempotency attribution, test costs)
+
+7. Pending Tasks:
+   - Complete remaining fixes for UseCase article critical feedback:
+     - VSA reference in参考文献 contradicts article's conclusion (needs explanation or removal)
+     - Interactor test cost discussion missing (パススルーInteractorのテストの価値)
+     - まとめ table still says "依存の方向が崩れる" - needs updating to match new "理由3" framing
+   - Run lint on modified 5de289f64ec515.md
+   - Commit and push all changes
+   - Update PR #71
+
+8. Current Work:
+   Addressing 6 points of critical feedback on `articles/5de289f64ec515.md` (UseCase layer article). Three edits have been applied so far:
+   
+   a) Rewrote "理由3" section to acknowledge that dependency inversion is possible without Interactor layer, reframing the benefit as hiding domain model details from Handler layer
+   
+   b) Added idempotency layer attribution note explaining it's application-level flow control
+   
+   c) Strengthened YAGNI rebuttal by acknowledging "後から追加できる" is valid, adding cross-cutting concern example, and explicitly acknowledging survivorship bias for CRUD-centric apps
+
+   Still remaining from the critical feedback:
+   - VSA reference contradiction (参考文献にVertical Slice Architectureを入れているが主張と矛盾)
+   - Interactor自体のテストコスト未言及
+   - まとめ table update
+
+9. Optional Next Step:
+   Continue addressing the remaining critical feedback points on `articles/5de289f64ec515.md`. The user forwarded detailed criticism including: "参考文献にJimmy BogardのVertical Slice Architectureが載っています。しかしVSAは「機能ごとにスライスして考え、水平な層を強制しない」という思想であり、「全機能に統一してUseCase層を持つ」という本記事の主張とは真逆の方向性です" and "パススルーInteractorのテストは薄くなりがちで、「テストファイルの数が増えるコスト」や「何もしないテストの価値」については触れられていません". After completing these fixes, run lint, commit, and push.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/6a6be09e-7381-4751-bcd0-8c94593d4332.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "213cdecf2ff0",
+  "session_id": "6a6be09e-7381-4751-bcd0-8c94593d4332",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T14:41:42.493889Z",
+  "branch": "feat/ddd-clean-architecture-articles",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/56e161aff29ff9.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "d128f752ccd7",
+  "checkpoint_transcript_start": 1212,
+  "transcript_lines_at_start": 1212,
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 4938,
+    "cache_read_tokens": 397876,
+    "output_tokens": 1727,
+    "api_call_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T14:41:42.042341Z",
+    "agent_lines": 5,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 5,
+    "agent_percentage": 100
+  }
+}

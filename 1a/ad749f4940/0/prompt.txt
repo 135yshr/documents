@@ -1,0 +1,152 @@
+Implement the following plan:
+
+# スクリーンショットを meow リポジトリに差し替え
+
+## Context
+
+記事「コードを読むのをやめた——AIが書いたコードはどうレビューするのか」のスクリーンショットが、現在 documents リポジトリ（Markdown記事の編集セッション）から取得されている。記事のテーマは「AIが書いた**コード**のレビュー」なので、実際のコードを扱う meow リポジトリ（Go製の自作プログラミング言語）の画面に差し替えることで、読者にとってより説得力のある内容にする。
+
+## 現状の画像と差し替え方針
+
+| 画像ファイル | 現在の内容 | 差し替え先 |
+|---|---|---|
+| `checkpoint-detail.png` | documents: 12f102af0a28 (100% AI) | meow のチェックポイント（セキュリティ修正 33% AI が最適） |
+| `session-view.png` | documents: セッション会話 | meow のセッション会話（セキュリティ脆弱性修正プラン） |
+| `diff-view.png` | documents: Markdown diff | meow の Go コード diff |
+| `attribution-33-percent.png` | **既に meow**（b687f00538b6, 33% AI） | 差し替え不要 |
+| `checkpoint-list.png` | documents 一覧（記事未使用） | meow 一覧に差し替え |
+
+## 対象ファイル
+
+- `articles/f14c01658cd157.md` — テキスト修正
+- `images/f14c01658cd157/*.png` — 画像差し替え
+
+## 実行手順
+
+### Step 1: meow のスクリーンショット取得
+
+ブラウザで以下の画面を撮影：
+
+1. **チェックポイント一覧** → `entire.io/gh/135yshr/meow/checkpoints`（既に一度表示済み）
+2. **チェックポイント詳細**（セキュリティ修正） → `entire.io/gh/135yshr/meow/checkpoints/main/b687f00538b6`
+   - ヘッダー部分（タイトル・Attribution 33% AI・セッション数）
+3. **セッションビュー** → 上記チェックポイントのセッションを展開
+   - プロンプト「セキュリティ脆弱性修正プラン」→ AI の応答の流れ
+4. **diff ビュー** → Go ファイル（compiler.go など）の diff を展開
+
+### Step 2: テキスト修正
+
+以下の箇所を meow の内容に合わせて修正：
+
+#### L127-132: コミットメッセージ例
+```
+現在: 📝 replace TODO placeholders with real Entire.io data
+変更: 🔒 fix: Harden compiler and CI against injection attacks
+      + Entire-Checkpoint ID を meow の実際の値に変更
+```
+
+#### L134: コミットメッセージの補足
+- 「私のリポジトリで」→ meow のコンテキストに合わせた表現に
+
+#### L149-155: セッションビューの説明文
+```
+現在: 「今日公開すると良い記事を選定してください」という指示に対して…
+変更: 「セキュリティ脆弱性修正プラン」に基づく指示に対して…
+      - AI が脆弱性を分析し、修正方針を立て、コードを修正した流れに書き換え
+      - 「17 のツールを実行」→ meow での実際のツール数に
+      - 「11 行変わった」→ meow の実際の差分行数に (+49/-9)
+```
+
+#### L165: Attribution テーブル
+- 3行構成を維持（documents 100% AI + meow 74% AI + meow 33% AI）
+- テーブル自体の変更は不要
+
+### Step 3: lint & コミット
+
+```bash
+npx prettier --write articles/f14c01658cd157.md
+npx markdownlint-cli2 articles/f14c01658cd157.md
+npx textlint articles/f14c01658cd157.md
+```
+
+## 注意点
+
+- `attribution-33-percent.png` は既に meow なので差し替え不要
+- コミットメッセージ例の `Co-Authored-By` や `Entire-Checkpoint` は meow で実際に記録された値を使う
+- セッションビューの説明文は、meow のセッション内容を見てから具体的に書き換える（スクリーンショットと整合させる）
+- Attribution テーブルは3行構成を維持（documents 100% AI は対比として残す）
+
+## 検証
+
+1. 画像がすべて meow リポジトリのものであること
+2. テキスト中の具体例（チェックポイントID、行数、ツール数）がスクリーンショットと一致すること
+3. 全 lint パス
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/ca783cfb-a0bb-4bc0-be10-ab623ad4351d.jsonl
+
+If this plan can be broken down into multiple independent tasks, consider using the TeamCreate tool to create a team and parallelize the work.
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

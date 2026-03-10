@@ -1,0 +1,83 @@
+<teammate-message teammate_id="team-lead">
+あなたはDDD/クリーンアーキテクチャ連載の記事を執筆するライターです。
+
+## チームの共有情報
+- チーム名: ddd-ca-series
+- ブランチ: feature/ddd-ca-series（既に作成済み）
+- 作業ディレクトリ: /Users/135yshr/projects/135yshr/documents
+
+## 記事の書き方ルール
+- 文体: ですます調（敬体）で統一。箇条書き内も含め、である調を混在させない
+- 一人称: 「私」を使用（「筆者」「僕」は不可）
+- published: false（下書き状態）
+- コード例: 必ずオリジナルのサンプルコード。業務プロジェクトのコードをそのまま使わない
+- proseWrap: never のため、段落は1行で記述
+- 参考記事のスタイル: articles/f2027369b648cc.md を参照（はじめに→本文→まとめ→参考文献の構成）
+- :::message ブロックで冒頭に記事の位置づけを示す
+- mermaid図、コード例、テーブルを積極的に使う
+- 各セクションの根拠となる一次情報源を参考文献として記載する
+
+## あなたの担当タスク
+
+以下の4つのタスクを順番に実行してください。各タスクを始める前にTaskUpdateでin_progressに、完了後にcompletedにしてください。
+
+### タスク11（TaskID: 11）: [#62] DDD の入力バリデーション設計
+ファイル: articles/fda3ceeeeb764f.md
+- 入力バリデーションの多層防御（プレゼン / アプリ / ドメイン）
+- ドメイン層のバリデーション（不変条件の保護）
+- アプリケーション層のバリデーション（ユースケース固有）
+- セキュリティ観点でのバリデーション戦略
+- title: "DDDの入力バリデーション設計〜ドメイン層で何を守り、何を外に任せるか〜"
+- emoji: "✅"
+- topics: ["Go", "DDD", "バリデーション", "セキュリティ", "設計"]
+
+### タスク12（TaskID: 12）: [#63] DDD で安全な API を設計する
+ファイル: articles/60d7d006c0f38f.md
+- CQRS における認可の設計箇所
+- コマンド実行時の権限チェックパターン
+- クエリの可視性制御（テナント分離等）
+- Go middleware での認可とドメイン層での認可の使い分け
+- title: "DDDで安全なAPIを設計する〜コマンドとクエリの権限制御パターン〜"
+- emoji: "🔐"
+- topics: ["Go", "DDD", "CQRS", "認可", "セキュリティ"]
+
+### タスク13（TaskID: 13）: [#64] AI が生成した DDD コードをどうレビューするか
+ファイル: articles/583ecabd270e4b.md
+- LLM が生成する DDD コードの典型的な問題パターン
+- 集約境界の妥当性チェック方法
+- ドメインロジックの漏れ出し検出
+- AI 生成コードに対する DDD 観点のレビューチェックリスト
+- title: "AIが生成したDDDコードをどうレビューするか"
+- emoji: "🤖"
+- topics: ["Go", "DDD", "AI", "CodeReview", "LLM"]
+
+### タスク14（TaskID: 14）: [#65] LLM をドメインエキスパートとして使う
+ファイル: articles/1820de942cca32.md
+- ユビキタス言語の抽出に LLM を活用する手法
+- イベントストーミングの事前準備としての AI 活用
+- ドメインモデルの叩き台を LLM で生成する方法
+- AI の出力をドメインエキスパートと検証するプロセス
+- title: "LLMをドメインエキスパートとして使う〜ユビキタス言語の整理にAIを活用する〜"
+- emoji: "🧠"
+- topics: ["Go", "DDD", "AI", "LLM", "ユビキタス言語"]
+
+記事は3000〜5000文字程度の充実した内容にしてください。各タスクの完了後にTaskUpdateで完了にし、次のタスクに進んでください。全て完了したらSendMessageでteam-leadに完了報告してください。
+</teammate-message>
+
+---
+
+<teammate-message teammate_id="writer-4" color="purple">
+{"type":"task_assignment","taskId":"11","subject":"[#62] DDD の入力バリデーション設計","description":"ファイル: articles/fda3ceeeeb764f.md\nIssue #62の内容に基づき記事を執筆する。\n- 入力バリデーションの多層防御（プレゼン / アプリ / ドメイン）\n- ドメイン層のバリデーション（不変条件の保護）\n- アプリケーション層のバリデーション（ユースケース固有）\n- セキュリティ観点でのバリデーション戦略\ntopics: [\"Go\", \"DDD\", \"バリデーション\", \"セキュリティ\", \"設計\"]\nemoji: ✅\n文体: ですます調、一人称「私」、published: false","assignedBy":"writer-4","timestamp":"2026-03-10T22:37:28.277Z"}
+</teammate-message>
+
+<teammate-message teammate_id="writer-4" color="purple">
+{"type":"task_assignment","taskId":"12","subject":"[#63] DDD で安全な API を設計する","description":"ファイル: articles/60d7d006c0f38f.md\nIssue #63の内容に基づき記事を執筆する。\n- CQRS における認可の設計箇所\n- コマンド実行時の権限チェックパターン\n- クエリの可視性制御（テナント分離等）\n- Go middleware での認可とドメイン層での認可の使い分け\ntopics: [\"Go\", \"DDD\", \"CQRS\", \"認可\", \"セキュリティ\"]\nemoji: 🔐\n文体: ですます調、一人称「私」、published: false","assignedBy":"writer-4","timestamp":"2026-03-10T22:40:28.101Z"}
+</teammate-message>
+
+<teammate-message teammate_id="writer-4" color="purple">
+{"type":"task_assignment","taskId":"13","subject":"[#64] AI が生成した DDD コードをどうレビューするか","description":"ファイル: articles/583ecabd270e4b.md\nIssue #64の内容に基づき記事を執筆する。\n- LLM が生成する DDD コードの典型的な問題パターン\n- 集約境界の妥当性チェック方法\n- ドメインロジックの漏れ出し検出\n- AI 生成コードに対する DDD 観点のレビューチェックリスト\ntopics: [\"Go\", \"DDD\", \"AI\", \"CodeReview\", \"LLM\"]\nemoji: 🤖\n文体: ですます調、一人称「私」、published: false","assignedBy":"writer-4","timestamp":"2026-03-10T22:41:56.849Z"}
+</teammate-message>
+
+<teammate-message teammate_id="writer-4" color="purple">
+{"type":"task_assignment","taskId":"14","subject":"[#65] LLM をドメインエキスパートとして使う","description":"ファイル: articles/1820de942cca32.md\nIssue #65の内容に基づき記事を執筆する。\n- ユビキタス言語の抽出に LLM を活用する手法\n- イベントストーミングの事前準備としての AI 活用\n- ドメインモデルの叩き台を LLM で生成する方法\n- AI の出力をドメインエキスパートと検証するプロセス\ntopics: [\"Go\", \"DDD\", \"AI\", \"LLM\", \"ユビキタス言語\"]\nemoji: 🧠\n文体: ですます調、一人称「私」、published: false","assignedBy":"writer-4","timestamp":"2026-03-10T22:43:38.762Z"}
+</teammate-message>

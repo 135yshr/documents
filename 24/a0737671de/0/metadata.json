@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "24a0737671de",
+  "session_id": "95a3e71a-da48-4b05-a1e0-a11b48c8a85c",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-10T07:00:56.458321Z",
+  "branch": "article/replace-entire-todo-with-real-data",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/f14c01658cd157.md",
+    ".textlintrc.json"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "7d581269a573",
+  "checkpoint_transcript_start": 299,
+  "transcript_lines_at_start": 299,
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 32759,
+    "cache_read_tokens": 4115460,
+    "output_tokens": 7182,
+    "api_call_count": 36
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T07:00:55.791541Z",
+    "agent_lines": 17,
+    "human_added": 9,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 26,
+    "agent_percentage": 65.38461538461539
+  }
+}

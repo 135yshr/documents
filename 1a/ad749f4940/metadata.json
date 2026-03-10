@@ -3,7 +3,7 @@
   "checkpoint_id": "1aad749f4940",
   "strategy": "manual-commit",
   "branch": "article/replace-entire-todo-with-real-data",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "articles/f14c01658cd157.md",
     "images/f14c01658cd157/checkpoint-detail.png",
@@ -25,13 +25,20 @@
       "context": "/1a/ad749f4940/1/context.md",
       "content_hash": "/1a/ad749f4940/1/content_hash.txt",
       "prompt": "/1a/ad749f4940/1/prompt.txt"
+    },
+    {
+      "metadata": "/1a/ad749f4940/2/metadata.json",
+      "transcript": "/1a/ad749f4940/2/full.jsonl",
+      "context": "/1a/ad749f4940/2/context.md",
+      "content_hash": "/1a/ad749f4940/2/content_hash.txt",
+      "prompt": "/1a/ad749f4940/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 55,
-    "cache_creation_tokens": 45713,
-    "cache_read_tokens": 1735918,
-    "output_tokens": 9269,
-    "api_call_count": 40
+    "input_tokens": 170,
+    "cache_creation_tokens": 172569,
+    "cache_read_tokens": 8444554,
+    "output_tokens": 27218,
+    "api_call_count": 125
   }
 }

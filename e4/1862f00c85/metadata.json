@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "e41862f00c85",
+  "strategy": "manual-commit",
+  "branch": "article/replace-entire-todo-with-real-data",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "articles/f14c01658cd157.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e4/1862f00c85/0/metadata.json",
+      "transcript": "/e4/1862f00c85/0/full.jsonl",
+      "context": "/e4/1862f00c85/0/context.md",
+      "content_hash": "/e4/1862f00c85/0/content_hash.txt",
+      "prompt": "/e4/1862f00c85/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 99,
+    "cache_creation_tokens": 78363,
+    "cache_read_tokens": 3937101,
+    "output_tokens": 17411,
+    "api_call_count": 72
+  }
+}

@@ -14,6 +14,13 @@
       "context": "/ca/cf5977dae1/0/context.md",
       "content_hash": "/ca/cf5977dae1/0/content_hash.txt",
       "prompt": "/ca/cf5977dae1/0/prompt.txt"
+    },
+    {
+      "metadata": "/ca/cf5977dae1/1/metadata.json",
+      "transcript": "/ca/cf5977dae1/1/full.jsonl",
+      "context": "/ca/cf5977dae1/1/context.md",
+      "content_hash": "/ca/cf5977dae1/1/content_hash.txt",
+      "prompt": "/ca/cf5977dae1/1/prompt.txt"
     }
   ],
   "token_usage": {

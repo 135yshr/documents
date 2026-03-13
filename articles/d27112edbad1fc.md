@@ -45,7 +45,7 @@ graph LR
     B -. 商品ID .-> C
 ```
 
-同じ「商品」でも、コンテキストごとに必要な属性やふるまいは異なります。これを1つの`Product`構造体にまとめると、全コンテキストの関心の混在する巨大な構造体ができあがります。境界づけられたコンテキストは、この問題を**モデルの適用範囲を明示的に区切る**ことで解決します。
+同じ「商品」でも、コンテキストごとに必要な属性やふるまいは異なります。これを1つの`Product`構造体にまとめると、全コンテキストの関心の混在した巨大な構造体ができあがります。境界づけられたコンテキストは、この問題を**モデルの適用範囲を明示的に区切る**ことで解決します。
 
 ---
 
@@ -110,18 +110,15 @@ myapp/
 // internal/catalog/domain/product.go
 package domain
 
+import "myapp/pkg/shared"
+
 type Product struct {
     ID          string
     Name        string
     Description string
     ImageURL    string
     CategoryID  string
-    Price       Money
-}
-
-type Money struct {
-    Amount   int64
-    Currency string
+    Price       shared.Money
 }
 ```
 

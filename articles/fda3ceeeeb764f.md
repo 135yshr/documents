@@ -414,7 +414,7 @@ func respondValidationErrors(w http.ResponseWriter, errs model.ValidationErrors)
 
 ## まとめ
 
-DDDにおけるバリデーション設計のポイントは以下の通りです。
+DDDにおけるバリデーション設計のポイントを整理します。
 
 | 層 | 守るもの | 設計方針 |
 | --- | --- | --- |

@@ -148,6 +148,7 @@ import (
     "time"
 
     "example/domain/event"
+    "github.com/google/uuid"
 )
 
 type Order struct {
@@ -165,6 +166,7 @@ func (o *Order) Confirm() error {
     o.status = OrderStatusConfirmed
     o.events = append(o.events, event.OrderConfirmed{
         Base: event.Base{
+            ID:        uuid.New().String(),
             Type:      "OrderConfirmed",
             AggID:     o.id,
             Timestamp: time.Now(),
@@ -226,6 +228,7 @@ type ChannelBus struct {
     handlers map[string][]event.Handler
     ch       chan event.Event
     done     chan struct{}
+    wg       sync.WaitGroup
 }
 
 func NewChannelBus(bufferSize int) *ChannelBus {
@@ -234,6 +237,7 @@ func NewChannelBus(bufferSize int) *ChannelBus {
         ch:       make(chan event.Event, bufferSize),
         done:     make(chan struct{}),
     }
+    b.wg.Add(1)
     go b.dispatch()
     return b
 }
@@ -256,6 +260,7 @@ func (b *ChannelBus) Subscribe(eventType string, handler event.Handler) {
 }
 
 func (b *ChannelBus) dispatch() {
+    defer b.wg.Done()
     for {
         select {
         case e := <-b.ch:
@@ -275,6 +280,7 @@ func (b *ChannelBus) dispatch() {
 
 func (b *ChannelBus) Close() {
     close(b.done)
+    b.wg.Wait()
 }
 ```
 
@@ -290,6 +296,7 @@ import (
     "context"
 
     "example/domain/event"
+    "example/domain/model"
     "example/domain/repository"
 )
 
@@ -322,6 +329,10 @@ func (uc *ConfirmOrderUseCase) Execute(ctx context.Context, orderID string) erro
     }
 
     // 集約に蓄積されたイベントを発行
+    // 注意: Save と Publish の原子性が保証されていません。
+    // 本番環境では Outbox パターンの導入を検討してください。
+    // Save と同一トランザクションでイベントを Outbox テーブルに書き込み、
+    // 別のワーカーが Outbox から読み取って Publish する方式です。
     if err := uc.bus.Publish(order.DomainEvents()...); err != nil {
         return err
     }
@@ -341,13 +352,19 @@ bus := eventbus.NewChannelBus(100)
 
 // 在庫を減らすハンドラ
 bus.Subscribe("OrderConfirmed", func(e event.Event) error {
-    ev := e.(event.OrderConfirmed)
+    ev, ok := e.(event.OrderConfirmed)
+    if !ok {
+        return fmt.Errorf("expected OrderConfirmed, got %T", e)
+    }
     return stockUseCase.DecreaseStock(ctx, ev.Items)
 })
 
 // ポイントを付与するハンドラ
 bus.Subscribe("OrderConfirmed", func(e event.Event) error {
-    ev := e.(event.OrderConfirmed)
+    ev, ok := e.(event.OrderConfirmed)
+    if !ok {
+        return fmt.Errorf("expected OrderConfirmed, got %T", e)
+    }
     return pointUseCase.AddPoints(ctx, ev.CustomerID, ev.TotalAmount/100)
 })
 ```
@@ -379,6 +396,7 @@ package eventbus
 import (
     "encoding/json"
     "fmt"
+    "log"
 
     "github.com/nats-io/nats.go"
 
@@ -387,6 +405,7 @@ import (
 
 type NATSBus struct {
     conn     *nats.Conn
+    subs     []*nats.Subscription
     handlers map[string][]event.Handler
 }
 
@@ -417,17 +436,26 @@ func (b *NATSBus) Publish(events ...event.Event) error {
 
 func (b *NATSBus) Subscribe(eventType string, handler event.Handler) {
     subject := fmt.Sprintf("domain.events.%s", eventType)
-    b.conn.Subscribe(subject, func(msg *nats.Msg) {
+    sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) {
         // イベントのデシリアライズとハンドラ呼び出し
         e, err := deserializeEvent(eventType, msg.Data)
         if err != nil {
+            log.Printf("イベントのデシリアライズに失敗しました: %v", err)
             return
         }
-        handler(e)
+        if err := handler(e); err != nil {
+            log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+        }
     })
+    if err == nil {
+        b.subs = append(b.subs, sub)
+    }
 }
 
 func (b *NATSBus) Close() {
+    for _, sub := range b.subs {
+        sub.Unsubscribe()
+    }
     b.conn.Close()
 }
 ```
@@ -455,7 +483,7 @@ func (b *NATSBus) Close() {
 
 ### 2. イベントに十分な情報を含める
 
-受信側が発行元の集約を再度読み込まなくて済むように、後続処理に必要な情報をイベントに含めます。ただし、集約の全フィールドを含める必要はありません。
+後続処理に必要な情報をイベントに含め、受信側が発行元へ問い合わせずに処理を完結できるようにします。ただし、集約の全フィールドを含める必要はありません。
 
 ### 3. 冪等なハンドラを実装する
 
@@ -463,8 +491,11 @@ func (b *NATSBus) Close() {
 
 ```go
 // 冪等なポイント付与ハンドラ
-func (h *PointHandler) Handle(e event.Event) error {
-    ev := e.(event.OrderConfirmed)
+func (h *PointHandler) Handle(ctx context.Context, e event.Event) error {
+    ev, ok := e.(event.OrderConfirmed)
+    if !ok {
+        return fmt.Errorf("expected OrderConfirmed, got %T", e)
+    }
     // イベントIDで重複チェック
     if h.processed(ev.ID) {
         return nil // 既に処理済み

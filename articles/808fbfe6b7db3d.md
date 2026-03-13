@@ -266,11 +266,11 @@ func (r *orderRepository) FindByID(ctx context.Context, id string) (*domain.Orde
 Goでは、interface満足をコンパイル時に検証するイディオムがあります。
 
 ```go
-// infrastructure/postgres/order_repository.go
-var _ usecase.OrderRepository = (*orderRepository)(nil)
+// cmd/main.go（コンポジションルート）
+var _ usecase.OrderRepository = (*postgres.OrderRepository)(nil)
 ```
 
-この1行により、`orderRepository`が`OrderRepository` interfaceを満たさなくなった場合にコンパイルエラーが発生します。実行時ではなくコンパイル時に検出できるため、安全です。
+この1行により、`OrderRepository`がinterfaceを満たさなくなった場合にコンパイルエラーが発生します。実行時ではなくコンパイル時に検出できるため、安全です。すべての依存関係を知っているコンポジションルート（`main.go` や DI の設定ファイル）に置くことで、infrastructure層からusecase層への依存を避けられます。
 
 ---
 

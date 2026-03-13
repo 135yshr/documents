@@ -16,6 +16,35 @@ published: false
 
 クリーンアーキテクチャといえば、あの**同心円図**を思い浮かべる方が多いのではないでしょうか。Entities、Use Cases、Interface Adapters、Frameworks & Driversの4層が同心円状に配置された図です。
 
+```mermaid
+graph TB
+    subgraph FD["Frameworks & Drivers"]
+        subgraph IA["Interface Adapters"]
+            subgraph UC["Use Cases"]
+                subgraph EN["Entities"]
+                    E["Enterprise<br>Business Rules"]
+                end
+                U["Application<br>Business Rules"]
+            end
+            I["Controllers<br>Gateways<br>Presenters"]
+        end
+        F["Web / DB / UI<br>External Interfaces"]
+    end
+
+    F -- "依存" --> I
+    I -- "依存" --> U
+    U -- "依存" --> E
+
+    style EN fill:#f7dc6f,stroke:#b7950b
+    style UC fill:#f1948a,stroke:#b03a2e
+    style IA fill:#85c1e9,stroke:#2471a3
+    style FD fill:#82e0aa,stroke:#1e8449
+```
+
+_※ 原典の同心円図は [The Clean Architecture（Robert C. Martin, 2012）](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) を参照してください。上図は同心円の構造をフローチャートで再現したものです。_
+
+矢印に注目してください。**すべての依存が外側から内側へ向かっています**。この「依存性ルール（Dependency Rule）」こそが、同心円図が伝えている最も重要なメッセージです。
+
 私も最初にクリーンアーキテクチャを学んだとき、あの図の通りにレイヤーを4つ作り、ディレクトリを4階層に分割しました。「この図の通りに作ればクリーンアーキテクチャだ」と思い込んでいたのです。
 
 しかし、原典である Robert C. Martin の著書を読み返すと、同心円図は本質の**一部分**を図解したものだと気づきました。本当に大事なのは**レイヤーの数や配置ではなく、依存性の方向**です。

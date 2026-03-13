@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "5c83b70a9a30",
+  "session_id": "98d16305-4c08-437b-9830-5da31df2534b",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-13T13:58:36.878422Z",
+  "branch": "feature/ddd-ca-series",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/f757ebaf058ccd.md",
+    "articles/fda3ceeeeb764f.md",
+    "articles/1820de942cca32.md",
+    "articles/4afd548d07480a.md",
+    "articles/60d7d006c0f38f.md",
+    "articles/78e3eb0a2a275a.md",
+    "articles/7d2428cbcd258d.md",
+    "articles/808fbfe6b7db3d.md",
+    "articles/98473f8e119657.md",
+    "articles/c05cf4efcc591f.md",
+    "articles/583ecabd270e4b.md",
+    "articles/5ffc0f6a7251e4.md",
+    "articles/b32070e6b12a01.md",
+    "articles/d27112edbad1fc.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "6a442bdb281e",
+  "checkpoint_transcript_start": 126,
+  "transcript_lines_at_start": 126,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-13T13:58:36.838048Z",
+    "agent_lines": 6420,
+    "human_added": 1237,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 7657,
+    "agent_percentage": 83.84484785163903
+  }
+}

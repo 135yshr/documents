@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "f6b4ce9f3fb4",
+  "session_id": "5b23683a-bc7e-43bf-984e-60df6ebef182",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-13T14:44:37.590434Z",
+  "branch": "refine/clean-architecture-article-prose",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "articles/808fbfe6b7db3d.md",
+    "images/808fbfe6b7db3d/clean-architecture-circles.png"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "88ca78b1ac97",
+  "checkpoint_transcript_start": 89,
+  "transcript_lines_at_start": 89,
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 22695,
+    "cache_read_tokens": 2724925,
+    "output_tokens": 12079,
+    "api_call_count": 44
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-13T14:44:37.515675Z",
+    "agent_lines": 12,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 12,
+    "agent_percentage": 100
+  }
+}

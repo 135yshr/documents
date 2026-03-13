@@ -139,15 +139,23 @@ type Stock struct {
 
 ### アクセス制御の効果
 
-`internal/catalog/`配下のコードは、`internal/inventory/`から直接インポートできません。
+同じ`internal`ディレクトリ配下に置いた場合、Go の`internal`パッケージの仕組みだけではコンテキスト間のアクセスを制限できません。`myapp/internal/inventory`から`myapp/internal/catalog/domain`へのインポートは、親ディレクトリ（`myapp/`）が共通しているため許可されます。
 
-```go
-// ❌ コンパイルエラー：internal パッケージのアクセス制限
-// internal/inventory/usecase/adjust_stock.go
-import "myapp/internal/catalog/domain"  // 不可
+コンテキスト間のアクセスを強制的に防ぐには、各コンテキストにネストした`internal`ディレクトリを設けます。
+
+```text
+internal/
+    catalog/
+        internal/     # catalog のみアクセス可能
+            domain/
+            usecase/
+    inventory/
+        internal/     # inventory のみアクセス可能
+            domain/
+            usecase/
 ```
 
-コンテキスト間の通信が必要な場合は、明示的な連携層を設ける必要があります。これにより、暗黙的な依存を防げます。
+この構成なら、`inventory/internal/`は`catalog`からアクセスできず、コンパイルエラーになります。コンテキスト間の通信が必要な場合は、各コンテキストの`internal`の外に公開APIを設け、明示的な連携層を経由させます。
 
 ---
 

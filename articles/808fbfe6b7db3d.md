@@ -157,6 +157,7 @@ type SlackSender struct {
 
 func (s *SlackSender) Send(ctx context.Context, msg *core.Message) error {
     // Slack APIを呼び出す
+    return nil
 }
 ```
 
@@ -217,6 +218,7 @@ type postgresOrderRepository struct {
 
 func (r *postgresOrderRepository) FindByID(ctx context.Context, id string) (*Order, error) {
     // PostgreSQLからOrderを取得する
+    return nil, nil
 }
 ```
 
@@ -252,10 +254,12 @@ type orderRepository struct {
 
 func (r *orderRepository) Save(ctx context.Context, order *domain.Order) error {
     // INSERTクエリを実行
+    return nil
 }
 
 func (r *orderRepository) FindByID(ctx context.Context, id string) (*domain.Order, error) {
     // SELECTクエリを実行
+    return nil, nil
 }
 ```
 

@@ -140,7 +140,12 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
         return nil, fmt.Errorf("failed to create task: %w", err)
     }
 
+    // Save時のDB一意制約違反もドメインエラーに変換する
+    // FindByTitleは早期フィードバック用で、並行リクエストの最終防衛線はDB側の一意制約
     if err := i.taskRepo.Save(ctx, task); err != nil {
+        if errors.Is(err, repository.ErrDuplicateTitle) {
+            return nil, ErrTaskTitleDuplicate
+        }
         return nil, fmt.Errorf("failed to save task: %w", err)
     }
 
@@ -320,13 +325,13 @@ flowchart LR
 
 セキュリティの観点では、OWASP（Open Worldwide Application Security Project）のガイドラインが参考になります。
 
-| 脅威                | 対策層                       | 具体的な対策                             |
-| ------------------- | ---------------------------- | ---------------------------------------- |
-| SQLインジェクション | プレゼンテーション＋インフラ | 入力サニタイズ＋プリペアドステートメント |
-| XSS                 | プレゼンテーション           | 出力エスケープ＋CSPヘッダ                |
-| 不正な状態遷移      | ドメイン                     | 状態遷移マップによる制御                 |
-| 権限昇格            | アプリケーション             | ユースケースでの権限チェック             |
-| 大量データ送信      | プレゼンテーション           | リクエストサイズ制限＋レートリミット     |
+| 脅威 | 対策層 | 具体的な対策 |
+| --- | --- | --- |
+| SQLインジェクション | インフラ（＋プレゼンテーション） | プリペアドステートメント（主対策）＋Content-Type検証（補助） |
+| XSS | プレゼンテーション | 出力エスケープ＋CSPヘッダ |
+| 不正な状態遷移 | ドメイン | 状態遷移マップによる制御 |
+| 権限昇格 | アプリケーション | ユースケースでの権限チェック |
+| 大量データ送信 | プレゼンテーション | リクエストサイズ制限＋レートリミット |
 
 Go のミドルウェアでセキュリティ関連のバリデーションを共通化する例です。
 
@@ -342,7 +347,7 @@ func RequestSizeLimit(maxBytes int64) func(http.Handler) http.Handler {
     }
 }
 
-func SanitizeInput() func(http.Handler) http.Handler {
+func ContentTypeValidator() func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             // Content-Typeの検証

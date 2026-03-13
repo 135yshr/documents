@@ -170,7 +170,9 @@ func (t *translator) toPayment(resp *external.ChargeResponse) (*domain.Payment, 
 
 func (t *translator) toPaymentStatus(state string) (domain.PaymentStatus, error) {
     switch state {
-    case "authorized", "captured":
+    case "authorized":
+        return domain.PaymentStatusPending, nil
+    case "captured":
         return domain.PaymentStatusCompleted, nil
     case "voided":
         return domain.PaymentStatusFailed, nil

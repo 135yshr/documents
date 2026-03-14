@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "b925e4ff9900",
+  "session_id": "1fcb6b99-d3e7-4b6f-9fa0-8896d1c6f548",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-14T13:51:24.213241Z",
+  "branch": "refine/clean-architecture-article-prose",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/4afd548d07480a.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "f2520ff38175",
+  "token_usage": {
+    "input_tokens": 75,
+    "cache_creation_tokens": 136967,
+    "cache_read_tokens": 5066179,
+    "output_tokens": 29226,
+    "api_call_count": 51
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-14T13:51:24.058743Z",
+    "agent_lines": 41,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 41,
+    "agent_percentage": 100
+  }
+}

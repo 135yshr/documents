@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "50014b34488c",
+  "strategy": "manual-commit",
+  "branch": "refine/clean-architecture-article-prose",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/4afd548d07480a.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/50/014b34488c/0/metadata.json",
+      "transcript": "/50/014b34488c/0/full.jsonl",
+      "context": "/50/014b34488c/0/context.md",
+      "content_hash": "/50/014b34488c/0/content_hash.txt",
+      "prompt": "/50/014b34488c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 156,
+    "cache_creation_tokens": 334439,
+    "cache_read_tokens": 13784016,
+    "output_tokens": 53876,
+    "api_call_count": 106
+  }
+}

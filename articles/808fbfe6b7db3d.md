@@ -3,7 +3,7 @@ title: "クリーンアーキテクチャの同心円図が伝えきれないこ
 emoji: "🎯"
 type: "tech"
 topics: ["Go", "CleanArchitecture", "DIP", "SOLID", "設計"]
-published: false
+published: true
 ---
 
 ## はじめに

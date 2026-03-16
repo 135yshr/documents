@@ -240,7 +240,7 @@ func (r *postgresOrderRepository) FindByID(ctx context.Context, id string) (*Ord
 
 ### 利用側でinterfaceを定義するパターン
 
-さらにGoらしいアプローチとして、interfaceを**利用する側**で定義する方法があります。
+さらにGoらしいアプローチとして、interfaceを**利用する側**で定義する方法があります。このパターンの実践的な適用例は、連載記事「[Goでクリーンアーキテクチャを導入するとinterfaceが爆発する問題への処方箋](https://zenn.dev/135yshr/articles/f2027369b648cc)」の処方箋1で詳しく解説しています。
 
 ```go
 // usecase/create_order.go

@@ -3,7 +3,7 @@
   "checkpoint_id": "100f6e6808fa",
   "strategy": "manual-commit",
   "branch": "fix/domain-event-code-samples",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     "articles/c05cf4efcc591f.md"
   ],
@@ -14,13 +14,20 @@
       "context": "/10/0f6e6808fa/0/context.md",
       "content_hash": "/10/0f6e6808fa/0/content_hash.txt",
       "prompt": "/10/0f6e6808fa/0/prompt.txt"
+    },
+    {
+      "metadata": "/10/0f6e6808fa/1/metadata.json",
+      "transcript": "/10/0f6e6808fa/1/full.jsonl",
+      "context": "/10/0f6e6808fa/1/context.md",
+      "content_hash": "/10/0f6e6808fa/1/content_hash.txt",
+      "prompt": "/10/0f6e6808fa/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 0,
-    "cache_creation_tokens": 0,
-    "cache_read_tokens": 0,
-    "output_tokens": 0,
-    "api_call_count": 0
+    "input_tokens": 24,
+    "cache_creation_tokens": 138353,
+    "cache_read_tokens": 1142710,
+    "output_tokens": 8185,
+    "api_call_count": 19
   }
 }

@@ -1,0 +1,250 @@
+次に公開すると良い記事を教えてください
+
+---
+
+@articles/c05cf4efcc591f.md を対象とします。
+記事を全体的に精査しました。全体的によく書かれた内容ですが、いくつか誤りと改善すべき点があります。
+
+---
+
+## 🔴 誤り① 未使用インポート（コンパイルエラー）
+
+**該当箇所**: `usecase/confirm_order.go`
+
+```go
+import (
+    "context"
+    "example/domain/event"
+    "example/domain/model"
+    "example/domain/repository"  // ← 使われていない
+)
+```
+
+Go では未使用インポートは**コンパイルエラー**になります。このファイルでは `repository` パッケージは一切使用されておらず（独自の `orderSaver` インターフェースを定義している）、このままでは動きません。
+
+**修正案:**
+```go
+import (
+    "context"
+    "example/domain/event"
+    "example/domain/model"
+)
+```
+
+---
+
+## 🔴 誤り② `ChannelBus.Close()` でチャネル内の残存イベントが失われる
+
+**該当箇所**: `ChannelBus.Close()` と `dispatch()`
+
+```go
+func (b *ChannelBus) Close() {
+    close(b.done)
+    b.wg.Wait()
+}
+```
+
+```go
+case <-b.done:
+    return  // b.ch にまだイベントが残っていても即座に終了してしまう
+```
+
+`done` チャネルをクローズした瞬間、`select` が `b.done` を選択すると `b.ch` に残っているイベントは未処理のまま goroutine が終了します。graceful shutdown として不完全です。
+
+**修正案:**
+```go
+func (b *ChannelBus) dispatch() {
+    defer b.wg.Done()
+    for {
+        select {
+        case e := <-b.ch:
+            b.mu.RLock()
+            handlers := b.handlers[e.EventType()]
+            b.mu.RUnlock()
+            for _, h := range handlers {
+                if err := h(e); err != nil {
+                    log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+                }
+            }
+        case <-b.done:
+            // 残存イベントをドレインしてから終了
+            for len(b.ch) > 0 {
+                e := <-b.ch
+                b.mu.RLock()
+                handlers := b.handlers[e.EventType()]
+                b.mu.RUnlock()
+                for _, h := range handlers {
+                    if err := h(e); err != nil {
+                        log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+                    }
+                }
+            }
+            return
+        }
+    }
+}
+```
+
+---
+
+## 🔴 誤り③ `NATSBus.Subscribe()` のエラーが無視される
+
+**該当箇所**:
+
+```go
+sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) { ... })
+if err == nil {
+    b.subs = append(b.subs, sub)
+}
+// err != nil のときは何もしない → サイレント失敗
+```
+
+サブスクリプションに失敗しても呼び出し元に伝わりません。ハンドラが実際には登録されていないのに登録されたかのように振る舞うため、イベントが無音で消えます。
+
+**修正案**: `Bus` インターフェースの `Subscribe` にエラー戻り値を追加するか、少なくともログ出力と panic を検討します。
+
+```go
+// domain/event/bus.go
+type Bus interface {
+    Publish(events ...Event) error
+    Subscribe(eventType string, handler Handler) error  // error を返すよう変更
+}
+
+// NATSBus.Subscribe の修正
+func (b *NATSBus) Subscribe(eventType string, handler event.Handler) error {
+    subject := fmt.Sprintf("domain.events.%s", eventType)
+    sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) {
+        e, err := deserializeEvent(eventType, msg.Data)
+        if err != nil {
+            log.Printf("イベントのデシリアライズに失敗しました: %v", err)
+            return
+        }
+        if err := handler(e); err != nil {
+            log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+        }
+    })
+    if err != nil {
+        return fmt.Errorf("NATSサブスクライブに失敗しました (subject: %s): %w", subject, err)
+    }
+    b.subs = append(b.subs, sub)
+    return nil
+}
+```
+
+---
+
+## 🟡 注意点① `ChannelBus.dispatch()` でハンドラのパニックが未保護
+
+ハンドラ内でパニックが起きた場合、`recover()` がないためプロセス全体がクラッシュします。
+
+**修正案**: ハンドラ呼び出しを `recover()` で保護する。
+
+```go
+func safeHandle(h event.Handler, e event.Event) (err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("ハンドラがパニックしました: %v", r)
+        }
+    }()
+    return h(e)
+}
+```
+
+---
+
+## 🟡 注意点② `DomainEvents()` が内部スライスを直接返している
+
+```go
+func (o *Order) DomainEvents() []event.Event {
+    return o.events  // 内部スライスへの参照を直接返している
+}
+```
+
+呼び出し元がこのスライスを変更すると集約の内部状態が壊れます。コピーを返すのが安全です。
+
+**修正案:**
+```go
+func (o *Order) DomainEvents() []event.Event {
+    result := make([]event.Event, len(o.events))
+    copy(result, o.events)
+    return result
+}
+```
+
+---
+
+## まとめ
+
+| 重要度 | 箇所 | 問題 |
+|--------|------|------|
+| 🔴 | `confirm_order.go` | 未使用インポート → コンパイルエラー |
+| 🔴 | `ChannelBus.Close()` | 残存イベントが失われる |
+| 🔴 | `NATSBus.Subscribe()` | エラーがサイレント無視される |
+| 🟡 | `dispatch()` | パニック未対策 |
+| 🟡 | `DomainEvents()` | 内部スライスの直接返却 |
+
+記事の設計方針と説明自体は正確でよく整理されています。特に①の未使用インポートはサンプルコードとして致命的なので、優先的に修正することをお勧めします。
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

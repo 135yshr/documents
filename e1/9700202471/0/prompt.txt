@@ -1,0 +1,266 @@
+Implement the following plan:
+
+# 修正計画: articles/98473f8e119657.md（第2次）
+
+## Context
+
+前回コミット（9e0898d）で参考文献リンクと `Money.Multiply` のバリデーションを修正済み。
+今回は批判的レビューで新たに発見された7件の問題を修正する。
+いずれも「サンプルコードをそのままコピーして使われると問題が起きる」か「解説が不正確」な箇所。
+
+---
+
+## 修正① `NewEmail` のバリデーションバグ（L119–128）
+
+**問題:** `strings.SplitN(v, "@", 2)` は最初の `@` でしか分割しないため
+`user@@domain.com` → `parts[1] = "@domain.com"` となり通過してしまう。
+
+**現状コード（L123–128）:**
+```go
+parts := strings.SplitN(v, "@", 2)
+if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") {
+    return Email{}, fmt.Errorf("メールアドレスの形式が不正です: %s", v)
+}
+return Email{value: strings.ToLower(v)}, nil
+```
+
+**修正後:**
+```go
+if strings.Count(v, "@") != 1 {
+    return Email{}, fmt.Errorf("メールアドレスの形式が不正です: %s", v)
+}
+parts := strings.SplitN(v, "@", 2)
+if parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") {
+    return Email{}, fmt.Errorf("メールアドレスの形式が不正です: %s", v)
+}
+normalized := parts[0] + "@" + strings.ToLower(parts[1])
+return Email{value: normalized}, nil
+```
+
+※ `Domain()` メソッドは `e.value` から再分割しているため、変更不要（ドメイン部はすでに小文字化済み）。
+
+---
+
+## 修正② `strings.ToLower` 全体適用の RFC 非準拠（L127と同箇所）
+
+**問題:** RFC 5321 ではローカルパートは大文字小文字を区別する。
+全体を小文字化するのは技術的に不正確。
+
+**対応:** 修正①と同時に対処。ドメイン部のみを小文字化する（上記の `normalized` 行で実現）。
+
+---
+
+## 修正③ `Role` の文字列ハードコーディング（L293–305）
+
+**問題:** `CanEdit()` と `IsAdmin()` で `"admin"` 等のリテラルを直書き。
+`OrderStatus` が `iota` 定数で一貫しているのに `Role` だけ文字列直書きで矛盾している。
+
+**現状コード（L292–305付近）:**
+```go
+func NewRole(v string) (Role, error) {
+    allowed := map[string]bool{"admin": true, "editor": true, "viewer": true}
+    ...
+}
+func (r Role) CanEdit() bool {
+    return r.value == "admin" || r.value == "editor"
+}
+func (r Role) IsAdmin() bool {
+    return r.value == "admin"
+}
+```
+
+**修正後:** `NewRole` の前に定数ブロックを追加し、メソッドと `NewRole` で参照する。
+
+```go
+const (
+    roleAdmin  = "admin"
+    roleEditor = "editor"
+    roleViewer = "viewer"
+)
+
+func NewRole(v string) (Role, error) {
+    allowed := map[string]bool{roleAdmin: true, roleEditor: true, roleViewer: true}
+    ...
+}
+func (r Role) CanEdit() bool {
+    return r.value == roleAdmin || r.value == roleEditor
+}
+func (r Role) IsAdmin() bool {
+    return r.value == roleAdmin
+}
+```
+
+---
+
+## 修正④ `CanTransitionTo` のマップ毎回生成（L357–370）
+
+**問題:** メソッド呼び出しのたびにマップをヒープ確保する。
+ステートマシンのチェックは頻繁に呼ばれる可能性があり、GC 負荷になる。
+
+**修正後:** パッケージレベル変数に移動する。
+
+```go
+var orderStatusTransitions = map[OrderStatus][]OrderStatus{
+    OrderStatusDraft:     {OrderStatusConfirmed, OrderStatusCancelled},
+    OrderStatusConfirmed: {OrderStatusShipped, OrderStatusCancelled},
+    OrderStatusShipped:   {OrderStatusDelivered},
+    OrderStatusDelivered: {},
+    OrderStatusCancelled: {},
+}
+
+func (s OrderStatus) CanTransitionTo(next OrderStatus) bool {
+    for _, allowed := range orderStatusTransitions[s] {
+        if allowed == next {
+            return true
+        }
+    }
+    return false
+}
+```
+
+---
+
+## 修正⑤ 等値比較の解説追加（L245「struct による値オブジェクト」セクション直後）
+
+**問題:** 記事冒頭の表に「値が等しければ同一とみなす」と記載しているが、
+Go でどう実現するかの説明が一切ない。
+
+**対応:** 「struct による値オブジェクト」節の直後に以下の説明ブロックを追加する。
+
+```markdown
+比較可能なフィールドのみからなる struct は `==` 演算子で比較できます。
+
+\```go
+e1, _ := NewEmail("user@example.com")
+e2, _ := NewEmail("user@example.com")
+fmt.Println(e1 == e2) // true
+\```
+
+非公開フィールドでも同一パッケージ内では `==` が使えます。
+`map` や `slice` をフィールドに持つ場合は `==` が使えないため、その場合は `Equals` メソッドを実装します。
+```
+
+---
+
+## 修正⑥ `currency` バリデーションに注釈追加（L165–173）
+
+**問題:** `currency == ""` のみチェックで `"INVALID"` 等の不正コードを受け入れる。
+「ドメイン固有の振る舞いを持つ値オブジェクトの代表例」という記事の文脈と矛盾。
+
+**対応:** コードにコメントを追加し、簡略化であることを明示する。
+
+```go
+if currency == "" {
+    return Money{}, errors.New("通貨コードは必須です")
+}
+// 注: 実際のプロダクションコードでは ISO 4217 コードの検証を追加する
+```
+
+---
+
+## 修正⑦ `OrderStatus.String()` の fallback にコメント追加（L350–354）
+
+**問題:** `"unknown"` を返す fallback があることは
+`OrderStatus(99)` のような不正値が作れることを示すが、記事で触れていない。
+
+**対応:** コード直後に一文追加する。
+
+```markdown
+`iota + 1` で開始することでゼロ値（0）を「未設定」として検出できますが、
+`OrderStatus(99)` のような範囲外の値は型システムだけでは防げません。
+不正値を防ぐには `NewOrderStatus` コンストラクタを用意するのが一般的です。
+```
+
+---
+
+## 修正する対象ファイルと行番号
+
+| 修正 | 対象行 | 変更の種類 |
+|------|--------|-----------|
+| ①②  | L119–128 | コード差し替え（バリデーション修正＋RFC対応） |
+| ③   | L288–305付近 | コード差し替え（定数追加） |
+| ④   | L332–370 | コード差し替え（パッケージ変数化） |
+| ⑤   | L253直後 | テキスト追加（等値比較の解説） |
+| ⑥   | L170付近 | コード内コメント追加 |
+| ⑦   | L373直後 | テキスト追加（exhaustive check への言及） |
+
+---
+
+## 実行手順
+
+1. Edit で修正①②（`NewEmail`）
+2. Edit で修正③（`Role` 定数化）
+3. Edit で修正④（`CanTransitionTo` のパッケージ変数化）
+4. Edit で修正⑤（等値比較の解説追加）
+5. Edit で修正⑥（currency コメント追加）
+6. Edit で修正⑦（OrderStatus fallback への言及追加）
+7. lint 実行: `npm run fmt` → `npm run lint` → `npm run lint:text`
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/84931863-f80f-4dbc-b2c2-6607fad742e1.jsonl
+
+If this plan can be broken down into multiple independent tasks, consider using the TeamCreate tool to create a team and parallelize the work.
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

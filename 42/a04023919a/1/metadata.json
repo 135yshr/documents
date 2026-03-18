@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "42a04023919a",
+  "session_id": "e701bc6f-be8a-466a-8813-eb456e414417",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-18T10:11:31.76211Z",
+  "branch": "fix/domain-event-code-samples",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/c05cf4efcc591f.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "cac9ca7a556f",
+  "checkpoint_transcript_start": 398,
+  "transcript_lines_at_start": 398,
+  "token_usage": {
+    "input_tokens": 47,
+    "cache_creation_tokens": 84015,
+    "cache_read_tokens": 3890708,
+    "output_tokens": 22262,
+    "api_call_count": 42
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-18T10:11:31.4427Z",
+    "agent_lines": 48,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 48,
+    "agent_percentage": 100
+  }
+}

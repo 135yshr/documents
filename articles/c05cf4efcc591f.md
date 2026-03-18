@@ -579,7 +579,9 @@ func (h *PointHandler) Handle(ctx context.Context, e event.Event) error {
 }
 ```
 
-:::message `processed` チェックと `markProcessed` の間には TOCTOU（Time-of-Check to Time-of-Use）競合があります。並行して同じイベントが届いた場合、両方が「未処理」と判定して二重に実行される可能性があります。完全な冪等性を保証するには、データベースのユニーク制約（`event_id` カラムに UNIQUE 制約）との組み合わせが必須です。アプリケーション層のチェックはあくまで「不要なDBアクセスを減らすための最適化」として扱ってください。なお、`processed` と `markProcessed` の実装はここでは省略しています。
+:::message
+
+`processed` チェックと `markProcessed` の間には TOCTOU（Time-of-Check to Time-of-Use）競合があります。並行して同じイベントが届いた場合、両方が「未処理」と判定して二重に実行される可能性があります。完全な冪等性を保証するには、データベースのユニーク制約（`event_id` カラムに UNIQUE 制約）との組み合わせが必須です。アプリケーション層のチェックはあくまで「不要なDBアクセスを減らすための最適化」として扱ってください。なお、`processed` と `markProcessed` の実装はここでは省略しています。
 
 :::
 

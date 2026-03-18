@@ -217,13 +217,18 @@ func (o *Order) ClearEvents() {
 // usecase/port/event_publisher.go
 package port
 
-import "example/domain/event"
+import (
+    "context"
+
+    "example/domain/event"
+)
 
 // EventPublisher はドメインイベントを外部に発行するポートです。
 // usecase 層はこのインターフェースに依存し、
 // 具体的な実装（ChannelBus, NATSBus など）はインフラ層が提供します。
+// ctx を受け取ることで、キャンセル・タイムアウトをハンドラまで伝播できます。
 type EventPublisher interface {
-    Publish(events ...event.Event) error
+    Publish(ctx context.Context, events ...event.Event) error
 }
 ```
 
@@ -248,19 +253,24 @@ import (
 // context.Context を受け取ることで、タイムアウト制御やキャンセル伝播に対応します。
 type Handler func(ctx context.Context, e event.Event) error
 
+// envelope は context と event をまとめてチャネルで転送するための内部型です。
+type envelope struct {
+    ctx context.Context
+    e   event.Event
+}
+
 type ChannelBus struct {
     mu       sync.RWMutex
+    closed   bool
     handlers map[string][]Handler
-    ch       chan event.Event
-    done     chan struct{}
+    ch       chan envelope
     wg       sync.WaitGroup
 }
 
 func NewChannelBus(bufferSize int) *ChannelBus {
     b := &ChannelBus{
         handlers: make(map[string][]Handler),
-        ch:       make(chan event.Event, bufferSize),
-        done:     make(chan struct{}),
+        ch:       make(chan envelope, bufferSize),
     }
     b.wg.Add(1)
     go b.dispatch()
@@ -270,10 +280,16 @@ func NewChannelBus(bufferSize int) *ChannelBus {
 // 注意: 複数イベントを送信する際、途中でバッファが満杯になると、
 // それ以前のイベントは送信済みで残りは未送信という中途半端な状態になります。
 // 本番環境では Outbox パターンの採用を検討してください。
-func (b *ChannelBus) Publish(events ...event.Event) error {
+func (b *ChannelBus) Publish(ctx context.Context, events ...event.Event) error {
+    b.mu.RLock()
+    closed := b.closed
+    b.mu.RUnlock()
+    if closed {
+        return fmt.Errorf("イベントバスはすでに閉じられています")
+    }
     for _, e := range events {
         select {
-        case b.ch <- e:
+        case b.ch <- envelope{ctx: ctx, e: e}:
         default:
             return fmt.Errorf("イベントバスのバッファが満杯です")
         }
@@ -290,45 +306,40 @@ func (b *ChannelBus) Subscribe(eventType string, handler Handler) error {
 
 func (b *ChannelBus) dispatch() {
     defer b.wg.Done()
-    for {
-        select {
-        case e := <-b.ch:
-            b.runHandlers(e)
-        case <-b.done:
-            // 残存イベントをドレインしてから終了
-            for len(b.ch) > 0 {
-                b.runHandlers(<-b.ch)
-            }
-            return
-        }
+    // close(b.ch) が呼ばれると range が終了し、残存イベントをすべて処理してから return します。
+    for env := range b.ch {
+        b.runHandlers(env.ctx, env.e)
     }
 }
 
 // 注意: ハンドラはシリアルに実行されます。
 // 時間のかかるハンドラが存在すると後続イベントの処理がブロックされます。
 // 各ハンドラを goroutine で実行するなど、並行化が必要な場面では改善を検討してください。
-func (b *ChannelBus) runHandlers(e event.Event) {
+func (b *ChannelBus) runHandlers(ctx context.Context, e event.Event) {
     b.mu.RLock()
     handlers := b.handlers[e.EventType()]
     b.mu.RUnlock()
     for _, h := range handlers {
-        if err := safeHandle(h, e); err != nil {
+        if err := safeHandle(ctx, h, e); err != nil {
             log.Printf("イベントハンドラでエラーが発生しました: %v", err)
         }
     }
 }
 
-func safeHandle(h Handler, e event.Event) (err error) {
+func safeHandle(ctx context.Context, h Handler, e event.Event) (err error) {
     defer func() {
         if r := recover(); r != nil {
             err = fmt.Errorf("ハンドラがパニックしました: %v", r)
         }
     }()
-    return h(context.Background(), e)
+    return h(ctx, e)
 }
 
 func (b *ChannelBus) Close() {
-    close(b.done)
+    b.mu.Lock()
+    b.closed = true
+    b.mu.Unlock()
+    close(b.ch) // dispatch goroutine に終了を通知し、残存イベントをドレインさせる
     b.wg.Wait()
 }
 ```
@@ -382,7 +393,7 @@ func (uc *ConfirmOrderUseCase) Execute(ctx context.Context, orderID string) erro
     // 本番環境では Outbox パターンの導入を検討してください。
     // Save と同一トランザクションでイベントを Outbox テーブルに書き込み、
     // 別のワーカーが Outbox から読み取って Publish する方式です。
-    if err := uc.publisher.Publish(order.DomainEvents()...); err != nil {
+    if err := uc.publisher.Publish(ctx, order.DomainEvents()...); err != nil {
         return err
     }
     order.ClearEvents()
@@ -474,7 +485,7 @@ func NewNATSBus(url string) (*NATSBus, error) {
     return &NATSBus{conn: conn}, nil
 }
 
-func (b *NATSBus) Publish(events ...event.Event) error {
+func (b *NATSBus) Publish(ctx context.Context, events ...event.Event) error {
     for _, e := range events {
         data, err := json.Marshal(e)
         if err != nil {
@@ -491,6 +502,11 @@ func (b *NATSBus) Publish(events ...event.Event) error {
 func (b *NATSBus) Subscribe(eventType string, handler Handler) error {
     subject := fmt.Sprintf("domain.events.%s", eventType)
     sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) {
+        defer func() {
+            if r := recover(); r != nil {
+                log.Printf("NATSハンドラがパニックしました: %v", r)
+            }
+        }()
         // deserializeEvent はイベント種別に応じて具体型へ復元する関数です。
         // ここではプレースホルダーとして示しており、実装は省略しています。
         // 実際には switch 文やレジストリパターンで具体型へデコードします。
@@ -537,8 +553,8 @@ func (b *NATSBus) Close() {
 
 DDDではイベントの用途に応じて区別することが推奨されます。
 
-- **ドメインイベント**: 同一境界づけられたコンテキスト（BC）内での通知。`OrderConfirmed` など、ドメインモデルの言語で表現される
-- **インテグレーションイベント**: BC 間・サービス間の通知。外部システムの関心に合わせた形式へ変換して送信する
+- **ドメインイベント**: 同一境界づけられたコンテキスト（BC）内での通知です。`OrderConfirmed` など、ドメインモデルの言語で表現されます。
+- **インテグレーションイベント**: BC 間・サービス間の通知です。外部システムの関心に合わせた形式へ変換して送信します。
 
 インテグレーションイベントはドメインイベントから変換して生成するのが一般的です。今回の NATS の例ではこの変換を省略していますが、サービス間通信では両者を明示的に分けることで、ドメインモデルの変更が外部サービスへ直接波及するのを防げます。
 

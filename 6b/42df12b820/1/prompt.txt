@@ -1,0 +1,399 @@
+次に公開すると良い記事を教えてください
+
+---
+
+@articles/c05cf4efcc591f.md を対象とします。
+記事を全体的に精査しました。全体的によく書かれた内容ですが、いくつか誤りと改善すべき点があります。
+
+---
+
+## 🔴 誤り① 未使用インポート（コンパイルエラー）
+
+**該当箇所**: `usecase/confirm_order.go`
+
+```go
+import (
+    "context"
+    "example/domain/event"
+    "example/domain/model"
+    "example/domain/repository"  // ← 使われていない
+)
+```
+
+Go では未使用インポートは**コンパイルエラー**になります。このファイルでは `repository` パッケージは一切使用されておらず（独自の `orderSaver` インターフェースを定義している）、このままでは動きません。
+
+**修正案:**
+```go
+import (
+    "context"
+    "example/domain/event"
+    "example/domain/model"
+)
+```
+
+---
+
+## 🔴 誤り② `ChannelBus.Close()` でチャネル内の残存イベントが失われる
+
+**該当箇所**: `ChannelBus.Close()` と `dispatch()`
+
+```go
+func (b *ChannelBus) Close() {
+    close(b.done)
+    b.wg.Wait()
+}
+```
+
+```go
+case <-b.done:
+    return  // b.ch にまだイベントが残っていても即座に終了してしまう
+```
+
+`done` チャネルをクローズした瞬間、`select` が `b.done` を選択すると `b.ch` に残っているイベントは未処理のまま goroutine が終了します。graceful shutdown として不完全です。
+
+**修正案:**
+```go
+func (b *ChannelBus) dispatch() {
+    defer b.wg.Done()
+    for {
+        select {
+        case e := <-b.ch:
+            b.mu.RLock()
+            handlers := b.handlers[e.EventType()]
+            b.mu.RUnlock()
+            for _, h := range handlers {
+                if err := h(e); err != nil {
+                    log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+                }
+            }
+        case <-b.done:
+            // 残存イベントをドレインしてから終了
+            for len(b.ch) > 0 {
+                e := <-b.ch
+                b.mu.RLock()
+                handlers := b.handlers[e.EventType()]
+                b.mu.RUnlock()
+                for _, h := range handlers {
+                    if err := h(e); err != nil {
+                        log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+                    }
+                }
+            }
+            return
+        }
+    }
+}
+```
+
+---
+
+## 🔴 誤り③ `NATSBus.Subscribe()` のエラーが無視される
+
+**該当箇所**:
+
+```go
+sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) { ... })
+if err == nil {
+    b.subs = append(b.subs, sub)
+}
+// err != nil のときは何もしない → サイレント失敗
+```
+
+サブスクリプションに失敗しても呼び出し元に伝わりません。ハンドラが実際には登録されていないのに登録されたかのように振る舞うため、イベントが無音で消えます。
+
+**修正案**: `Bus` インターフェースの `Subscribe` にエラー戻り値を追加するか、少なくともログ出力と panic を検討します。
+
+```go
+// domain/event/bus.go
+type Bus interface {
+    Publish(events ...Event) error
+    Subscribe(eventType string, handler Handler) error  // error を返すよう変更
+}
+
+// NATSBus.Subscribe の修正
+func (b *NATSBus) Subscribe(eventType string, handler event.Handler) error {
+    subject := fmt.Sprintf("domain.events.%s", eventType)
+    sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) {
+        e, err := deserializeEvent(eventType, msg.Data)
+        if err != nil {
+            log.Printf("イベントのデシリアライズに失敗しました: %v", err)
+            return
+        }
+        if err := handler(e); err != nil {
+            log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+        }
+    })
+    if err != nil {
+        return fmt.Errorf("NATSサブスクライブに失敗しました (subject: %s): %w", subject, err)
+    }
+    b.subs = append(b.subs, sub)
+    return nil
+}
+```
+
+---
+
+## 🟡 注意点① `ChannelBus.dispatch()` でハンドラのパニックが未保護
+
+ハンドラ内でパニックが起きた場合、`recover()` がないためプロセス全体がクラッシュします。
+
+**修正案**: ハンドラ呼び出しを `recover()` で保護する。
+
+```go
+func safeHandle(h event.Handler, e event.Event) (err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("ハンドラがパニックしました: %v", r)
+        }
+    }()
+    return h(e)
+}
+```
+
+---
+
+## 🟡 注意点② `DomainEvents()` が内部スライスを直接返している
+
+```go
+func (o *Order) DomainEvents() []event.Event {
+    return o.events  // 内部スライスへの参照を直接返している
+}
+```
+
+呼び出し元がこのスライスを変更すると集約の内部状態が壊れます。コピーを返すのが安全です。
+
+**修正案:**
+```go
+func (o *Order) DomainEvents() []event.Event {
+    result := make([]event.Event, len(o.events))
+    copy(result, o.events)
+    return result
+}
+```
+
+---
+
+## まとめ
+
+| 重要度 | 箇所 | 問題 |
+|--------|------|------|
+| 🔴 | `confirm_order.go` | 未使用インポート → コンパイルエラー |
+| 🔴 | `ChannelBus.Close()` | 残存イベントが失われる |
+| 🔴 | `NATSBus.Subscribe()` | エラーがサイレント無視される |
+| 🟡 | `dispatch()` | パニック未対策 |
+| 🟡 | `DomainEvents()` | 内部スライスの直接返却 |
+
+記事の設計方針と説明自体は正確でよく整理されています。特に①の未使用インポートはサンプルコードとして致命的なので、優先的に修正することをお勧めします。
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+前回のコードバグに加え、今回は設計・思想レベルまで踏み込んで批判的にレビューします。
+
+---
+
+## 🔴 重大な設計上の問題
+
+### ① `Bus` インターフェースがドメイン層に存在する（最大の問題）
+
+```go
+// domain/event/bus.go  ← ドメイン層に置くべきではない
+type Bus interface {
+    Publish(events ...Event) error
+    Subscribe(eventType string, handler Handler)
+}
+```
+
+`Bus` はメッセージング基盤の概念であり、ドメイン層が知るべきことではありません。これはクリーンアーキテクチャの依存関係ルール違反です。`Bus` インターフェースはアプリケーション層（usecase層）に置くか、ポート＆アダプターとして外側のレイヤーで定義すべきです。
+
+**修正案:** `usecase/port/event_publisher.go` などに移動する。
+
+```go
+// usecase/port/event_publisher.go
+package port
+
+import "example/domain/event"
+
+type EventPublisher interface {
+    Publish(events ...event.Event) error
+}
+```
+
+---
+
+### ② 「イミュータブルにする」という説明とコードが矛盾している
+
+ベストプラクティス①でこう書いています：
+
+> Go では**非公開フィールドとゲッターメソッド**で不変性を表現できます。
+
+しかし実際のコードでは `Base` 構造体のフィールドがすべて公開されています：
+
+```go
+type Base struct {
+    ID        string    `json:"event_id"`    // 公開
+    Type      string    `json:"event_type"`  // 公開
+    AggID     string    `json:"aggregate_id"`// 公開
+    Timestamp time.Time `json:"occurred_at"` // 公開
+}
+```
+
+説明とコードが真逆になっています。これでは読者が混乱します。公開フィールドは外部から自由に書き換えられるため、イミュータブルとは言えません。
+
+---
+
+### ③ `NATSBus` の `handlers` フィールドが完全に未使用
+
+```go
+type NATSBus struct {
+    conn     *nats.Conn
+    subs     []*nats.Subscription
+    handlers map[string][]event.Handler  // ← 初期化されているが一切使われていない
+}
+```
+
+NATSではコールバックを `Subscribe` 時に直接渡すため、この `handlers` マップは不要です。デッドコードとして残っており、読者に誤解を与えます。
+
+---
+
+### ④ `Handler` が `context.Context` を受け取れない
+
+```go
+type Handler func(e Event) error
+```
+
+Goの実践ではDB操作・HTTP呼び出しなどすべてに `context.Context` を渡すのが標準です。このシグネチャではタイムアウト制御もキャンセル伝播もできません。本番で使えない設計です。
+
+**修正案:**
+```go
+type Handler func(ctx context.Context, e Event) error
+```
+
+---
+
+## 🟠 説明の不正確さ・誤解を招く記述
+
+### ⑤ 「非同期的に行います」という説明が不正確
+
+75行目：
+> この原則に従い、ドメインイベントを使って集約間の通信を**非同期的に**行います。
+
+しかし `ChannelBus` の実装では、`Publish` はチャネルに投入するだけですが、**ハンドラがいつ完了するかは `Execute` の呼び出し元からは不透明**です。`repo.Save` が成功して `bus.Publish` が成功しても、ハンドラが実行完了する前に `Execute` は `nil` を返します。これは「非同期」という一言では説明が足りず、Outboxパターンへの言及もこの文脈では不十分です。
+
+---
+
+### ⑥ ドメインイベントとインテグレーションイベントの区別がない
+
+記事では同じ `OrderConfirmed` イベントをインプロセスバスでも NATS でも使っています。DDDでは：
+
+- **ドメインイベント**: 同一境界づけられたコンテキスト（BC）内での通知
+- **インテグレーションイベント**: BC間・サービス間での通知
+
+の区別が重要です。インテグレーションイベントはドメインイベントから変換して生成するのが一般的であり、両者を同一視して説明するのは設計上の誤解を招きます。
+
+---
+
+### ⑦ `time.Now()` を直接呼び出しているためテストが困難
+
+```go
+Timestamp: time.Now(),
+```
+
+ドメインモデル内で `time.Now()` を直接呼ぶと、テストで時刻を固定できません。記事はテストの困難さを問題として挙げているにもかかわらず、自分のコードでも同じ問題を抱えています。
+
+**修正案:** `Clock` インターフェースを注入するか、引数で時刻を渡す。
+
+```go
+func (o *Order) Confirm(now time.Time) error { ... }
+```
+
+---
+
+### ⑧ まとめの「独立してデプロイできる」は条件付きで正確でない
+
+> 各集約を独立して開発・**テスト・デプロイ**できるようになります。
+
+インプロセスバスを使っている限り、同一プロセス内での話であり「独立デプロイ」は実現しません。外部メッセージキューに切り替えて初めて独立デプロイが可能になります。条件を明示すべきです。
+
+---
+
+## 📋 問題点のまとめ
+
+| 重要度 | 分類 | 問題 |
+|--------|------|------|
+| 🔴 | 設計 | `Bus` インターフェースがドメイン層に存在 |
+| 🔴 | 矛盾 | イミュータブル推奨なのに `Base` フィールドがすべて公開 |
+| 🔴 | コード | `NATSBus.handlers` が完全な未使用デッドコード |
+| 🔴 | 設計 | `Handler` に `context.Context` がない |
+| 🟠 | 説明 | 「非同期」の説明が不正確・不十分 |
+| 🟠 | 説明 | ドメインイベントとインテグレーションイベントの混同 |
+| 🟠 | コード | `time.Now()` 直接使用でテスト困難 |
+| 🟠 | 説明 | 「独立デプロイ」の説明が条件不足 |
+| 🟡 | コード | 未使用インポート（コンパイルエラー）※前回指摘 |
+| 🟡 | コード | `ChannelBus.Close()` で残存イベント消失 ※前回指摘 |
+| 🟡 | コード | `NATSBus.Subscribe()` のエラー無視 ※前回指摘 |
+
+概念の説明自体は丁寧ですが、**説明とコードの乖離**と**ドメイン層の汚染**が最も根本的な問題です。特に「Bus をドメイン層に置く」設計は、DDD×クリーンアーキテクチャ連載として発信するには再考が必要です。

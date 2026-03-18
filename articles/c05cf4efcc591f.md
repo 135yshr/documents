@@ -179,7 +179,9 @@ func (o *Order) Confirm() error {
 }
 
 func (o *Order) DomainEvents() []event.Event {
-    return o.events
+    result := make([]event.Event, len(o.events))
+    copy(result, o.events)
+    return result
 }
 
 func (o *Order) ClearEvents() {
@@ -203,7 +205,7 @@ type Handler func(e Event) error
 
 type Bus interface {
     Publish(events ...Event) error
-    Subscribe(eventType string, handler Handler)
+    Subscribe(eventType string, handler Handler) error
 }
 ```
 
@@ -253,10 +255,11 @@ func (b *ChannelBus) Publish(events ...event.Event) error {
     return nil
 }
 
-func (b *ChannelBus) Subscribe(eventType string, handler event.Handler) {
+func (b *ChannelBus) Subscribe(eventType string, handler event.Handler) error {
     b.mu.Lock()
     defer b.mu.Unlock()
     b.handlers[eventType] = append(b.handlers[eventType], handler)
+    return nil
 }
 
 func (b *ChannelBus) dispatch() {
@@ -264,18 +267,35 @@ func (b *ChannelBus) dispatch() {
     for {
         select {
         case e := <-b.ch:
-            b.mu.RLock()
-            handlers := b.handlers[e.EventType()]
-            b.mu.RUnlock()
-            for _, h := range handlers {
-                if err := h(e); err != nil {
-                    log.Printf("イベントハンドラでエラーが発生しました: %v", err)
-                }
-            }
+            b.runHandlers(e)
         case <-b.done:
+            // 残存イベントをドレインしてから終了
+            for len(b.ch) > 0 {
+                b.runHandlers(<-b.ch)
+            }
             return
         }
     }
+}
+
+func (b *ChannelBus) runHandlers(e event.Event) {
+    b.mu.RLock()
+    handlers := b.handlers[e.EventType()]
+    b.mu.RUnlock()
+    for _, h := range handlers {
+        if err := safeHandle(h, e); err != nil {
+            log.Printf("イベントハンドラでエラーが発生しました: %v", err)
+        }
+    }
+}
+
+func safeHandle(h event.Handler, e event.Event) (err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("ハンドラがパニックしました: %v", r)
+        }
+    }()
+    return h(e)
 }
 
 func (b *ChannelBus) Close() {
@@ -297,7 +317,6 @@ import (
 
     "example/domain/event"
     "example/domain/model"
-    "example/domain/repository"
 )
 
 type orderSaver interface {
@@ -351,22 +370,26 @@ func (uc *ConfirmOrderUseCase) Execute(ctx context.Context, orderID string) erro
 bus := eventbus.NewChannelBus(100)
 
 // 在庫を減らすハンドラ
-bus.Subscribe("OrderConfirmed", func(e event.Event) error {
+if err := bus.Subscribe("OrderConfirmed", func(e event.Event) error {
     ev, ok := e.(event.OrderConfirmed)
     if !ok {
         return fmt.Errorf("expected OrderConfirmed, got %T", e)
     }
     return stockUseCase.DecreaseStock(ctx, ev.Items)
-})
+}); err != nil {
+    log.Fatalf("サブスクライブに失敗しました: %v", err)
+}
 
 // ポイントを付与するハンドラ
-bus.Subscribe("OrderConfirmed", func(e event.Event) error {
+if err := bus.Subscribe("OrderConfirmed", func(e event.Event) error {
     ev, ok := e.(event.OrderConfirmed)
     if !ok {
         return fmt.Errorf("expected OrderConfirmed, got %T", e)
     }
     return pointUseCase.AddPoints(ctx, ev.CustomerID, ev.TotalAmount/100)
-})
+}); err != nil {
+    log.Fatalf("サブスクライブに失敗しました: %v", err)
+}
 ```
 
 注文確定のユースケースは在庫やポイントの存在を知りません。新しい要件（メール送信、分析データ送信など）を追加するときも、ハンドラを追加するだけで済みます。
@@ -434,7 +457,7 @@ func (b *NATSBus) Publish(events ...event.Event) error {
     return nil
 }
 
-func (b *NATSBus) Subscribe(eventType string, handler event.Handler) {
+func (b *NATSBus) Subscribe(eventType string, handler event.Handler) error {
     subject := fmt.Sprintf("domain.events.%s", eventType)
     sub, err := b.conn.Subscribe(subject, func(msg *nats.Msg) {
         // イベントのデシリアライズとハンドラ呼び出し
@@ -447,9 +470,11 @@ func (b *NATSBus) Subscribe(eventType string, handler event.Handler) {
             log.Printf("イベントハンドラでエラーが発生しました: %v", err)
         }
     })
-    if err == nil {
-        b.subs = append(b.subs, sub)
+    if err != nil {
+        return fmt.Errorf("NATSサブスクライブに失敗しました (subject: %s): %w", subject, err)
     }
+    b.subs = append(b.subs, sub)
+    return nil
 }
 
 func (b *NATSBus) Close() {

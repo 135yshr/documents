@@ -281,10 +281,14 @@ func NewChannelBus(bufferSize int) *ChannelBus {
 // それ以前のイベントは送信済みで残りは未送信という中途半端な状態になります。
 // 本番環境では Outbox パターンの採用を検討してください。
 func (b *ChannelBus) Publish(ctx context.Context, events ...event.Event) error {
+    // RLock を defer で保持し、closed 判定からチャネル送信までを同一の排他区間で行います。
+    // RLock を外してから送信すると、その間に Close() が close(b.ch) を呼び出した場合に
+    // "send on closed channel" パニックが発生する TOCTOU 競合を引き起こします。
+    // select の default ケースにより送信はブロックしないため、
+    // RLock を保持したまま送信しても Close() と排他的に待ち合うだけで済みます。
     b.mu.RLock()
-    closed := b.closed
-    b.mu.RUnlock()
-    if closed {
+    defer b.mu.RUnlock()
+    if b.closed {
         return fmt.Errorf("イベントバスはすでに閉じられています")
     }
     for _, e := range events {
@@ -464,15 +468,15 @@ import (
     "encoding/json"
     "fmt"
     "log"
+    "sync"
 
     "github.com/nats-io/nats.go"
 
     "example/domain/event"
 )
 
-// 注意: subs スライスへの並行アクセスは保護されていません。
-// 複数の goroutine から Subscribe を呼び出す場合は mutex を追加してください。
 type NATSBus struct {
+    mu   sync.Mutex
     conn *nats.Conn
     subs []*nats.Subscription
 }
@@ -515,6 +519,9 @@ func (b *NATSBus) Subscribe(eventType string, handler Handler) error {
             log.Printf("イベントのデシリアライズに失敗しました: %v", err)
             return
         }
+        // NATS のコールバックにはリクエストスコープのコンテキストがないため
+        // context.Background() を使用します。タイムアウトが必要な場合は
+        // ここで context.WithTimeout を組み合わせてください。
         if err := handler(context.Background(), e); err != nil {
             log.Printf("イベントハンドラでエラーが発生しました: %v", err)
         }
@@ -522,12 +529,18 @@ func (b *NATSBus) Subscribe(eventType string, handler Handler) error {
     if err != nil {
         return fmt.Errorf("NATSサブスクライブに失敗しました (subject: %s): %w", subject, err)
     }
+    b.mu.Lock()
     b.subs = append(b.subs, sub)
+    b.mu.Unlock()
     return nil
 }
 
 func (b *NATSBus) Close() {
-    for _, sub := range b.subs {
+    b.mu.Lock()
+    subs := b.subs
+    b.subs = nil
+    b.mu.Unlock()
+    for _, sub := range subs {
         sub.Unsubscribe()
     }
     b.conn.Close()

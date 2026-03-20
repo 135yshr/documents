@@ -91,7 +91,11 @@ myapp/
 │   └── order/            # 注文コンテキスト
 │       ├── domain/
 │       │   ├── order.go
-│       │   └── order_item.go
+│       │   ├── order_item.go
+│       │   └── event/
+│       │       └── order_placed.go
+│       ├── port/
+│       │   └── stock_checker.go
 │       ├── usecase/
 │       │   └── place_order.go
 │       └── infra/
@@ -99,7 +103,8 @@ myapp/
 │               └── order_repo.go
 └── pkg/
     └── shared/           # 共有カーネル（後述）
-        └── money.go
+        ├── money.go
+        └── eventbus.go
 ```
 
 ### コンテキストごとのドメインモデル
@@ -256,7 +261,7 @@ require myapp/shared v0.0.0
 | 導入コスト    | 低い                | やや高い                             |
 | 推奨規模      | 小〜中規模          | 中〜大規模                           |
 
-小規模なプロジェクトでは`internal`パッケージで十分です。チームが複数に分かれ、各コンテキストの開発サイクルが異なる場合にGo Workspaceへの移行を検討します。
+小規模なプロジェクトでは`internal`パッケージで十分です。チームが複数に分かれ、各コンテキストの開発サイクルが異なる場合にGo Workspaceへの移行を検討します。特に「チームが独立してデプロイする必要がある」場合は、モジュール分割が有効です。逆に、デプロイが常にモノリシックであれば、`internal`パッケージによるアクセス制御で十分な境界を保てます。
 
 ---
 
@@ -285,18 +290,46 @@ graph TB
 
 #### パターン1：共有インターフェースによる連携
 
-コンテキスト間の連携ポイントを明示的なインターフェースとして定義します。
+コンテキスト間の連携ポイントを明示的なインターフェースとして定義します。このとき、インターフェースは**使用する側（消費者）のコンテキストが所有**すべきです。依存性逆転の原則（DIP）に従い、注文コンテキストが在庫コンテキストに依存するのではなく、注文コンテキストが必要なインターフェースを定義し、在庫コンテキストがそれを実装します。
 
 ```go
-// shared/stockchecker.go
-package shared
+// order/port/stock_checker.go  ← 注文コンテキストが所有
+package port
 
 import "context"
 
-// StockChecker は在庫確認のための共有インターフェースです。
-// 注文コンテキストが在庫コンテキストに問い合わせる際に使用します。
+// StockChecker は在庫確認のためのポートインターフェースです。
+// 注文コンテキストが必要なインターフェースを定義し、在庫コンテキストが実装します。
 type StockChecker interface {
     IsAvailable(ctx context.Context, productID string, quantity int) (bool, error)
+}
+```
+
+```go
+// inventory/adapter/order_stock_checker.go  ← 在庫コンテキストが実装を提供
+package adapter
+
+import "context"
+
+type stockReader interface {
+    FindByProductID(ctx context.Context, productID string) (*Stock, error)
+}
+
+// OrderStockChecker は注文コンテキストの StockChecker を実装するアダプターです。
+type OrderStockChecker struct {
+    stockRepo stockReader
+}
+
+func NewOrderStockChecker(stockRepo stockReader) *OrderStockChecker {
+    return &OrderStockChecker{stockRepo: stockRepo}
+}
+
+func (c *OrderStockChecker) IsAvailable(ctx context.Context, productID string, quantity int) (bool, error) {
+    stock, err := c.stockRepo.FindByProductID(ctx, productID)
+    if err != nil {
+        return false, fmt.Errorf("在庫情報の取得に失敗しました: %w", err)
+    }
+    return stock.Quantity >= quantity, nil
 }
 ```
 
@@ -306,11 +339,11 @@ package usecase
 
 import (
     "context"
-    "myapp/shared"
+    "myapp/internal/order/port"
 )
 
 type PlaceOrderUseCase struct {
-    stockChecker shared.StockChecker
+    stockChecker port.StockChecker
     orderRepo    orderWriter
 }
 
@@ -331,17 +364,27 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput)
 }
 ```
 
+:::message
+
+**TOCTOU（Time-of-check/Time-of-use）に注意**
+
+在庫確認（`IsAvailable`）と注文保存（`orderRepo.Save`）は別トランザクションです。確認後から保存までの間に別の注文が在庫を消費する可能性があります。高トラフィック環境では、楽観ロック（バージョン番号による競合検出）や Saga パターンなど、整合性を保つ追加の仕組みが必要です。
+
+:::
+
 #### パターン2：ドメインイベントによる非同期連携
 
 コンテキスト間の結合度をさらに下げたい場合は、ドメインイベントを使います。
 
+ドメインイベントは**発行する側のコンテキストが所有**します。`OrderPlaced`は注文コンテキストが発行するイベントなので、`order/domain/event/`に定義します。在庫コンテキストはそのパッケージをインポートして購読します。
+
 ```go
-// shared/event.go
-package shared
+// order/domain/event/order_placed.go  ← 注文コンテキストが所有
+package event
 
 import "time"
 
-// DomainEvent はコンテキスト間で伝達されるイベントの基底型です。
+// DomainEvent はイベントの共通フィールドを持つ基底型です。
 type DomainEvent struct {
     ID         string
     OccurredAt time.Time
@@ -357,7 +400,7 @@ type OrderPlaced struct {
 ```
 
 ```go
-// shared/eventbus.go
+// shared/eventbus.go  ← インフラ横断のインターフェースは shared に残す
 package shared
 
 import "context"
@@ -379,20 +422,20 @@ package usecase
 
 import (
     "context"
-    "myapp/shared"
+    "myapp/internal/order/domain/event"
 )
 
 type HandleOrderPlaced struct {
     stockRepo stockWriter
 }
 
-func (h *HandleOrderPlaced) Handle(ctx context.Context, event any) error {
+func (h *HandleOrderPlaced) Handle(ctx context.Context, e any) error {
     // Publish 側でポインタ型として渡す前提のキャスト
-    e, ok := event.(*shared.OrderPlaced)
+    placed, ok := e.(*event.OrderPlaced)
     if !ok {
         return nil
     }
-    return h.stockRepo.Decrease(ctx, e.ProductID, e.Quantity)
+    return h.stockRepo.Decrease(ctx, placed.ProductID, placed.Quantity)
 }
 ```
 
@@ -401,7 +444,7 @@ func (h *HandleOrderPlaced) Handle(ctx context.Context, event any) error {
 モノレポでコンテキスト境界を維持するために、私は以下の点を意識しています。
 
 - **直接インポートの禁止**: コンテキスト間で`internal`パッケージを直接インポートしないようにします。ネストした`internal`構成であればコンパイラが検出しますが、より細かいルールを設けたい場合は[`depguard`](https://github.com/OpenPeeDeeP/depguard)などのlintツールをCIに組み込む方法もあります
-- **共有は最小限に**: `shared`パッケージには値オブジェクトやイベント定義のみを配置します。ドメインロジックは各コンテキスト内に閉じ込めます
+- **共有は最小限に**: `shared`パッケージには値オブジェクト（`Money`など）とインフラ横断インターフェースのみを配置します。インターフェースは消費者コンテキストが定義し、ドメインイベントは発行元コンテキストが所有します。
 - **IDでの参照**: コンテキスト間でエンティティを参照する場合は、構造体の直接参照ではなくIDを使います
 - **命名の独立性**: 各コンテキストで同じ概念（商品、ユーザー等）に異なる名前を付けることを恐れないようにします。カタログの`Product`と在庫の`Stock`は別の型です
 
@@ -417,6 +460,10 @@ func (h *HandleOrderPlaced) Handle(ctx context.Context, event any) error {
 | コンテキスト間連携 | 共有インターフェースまたはドメインイベントを使う | 結合度を最小限に保てる |
 
 境界づけられたコンテキストは、DDDの中でも特に実務的な価値が高い概念です。Goの`internal`パッケージやGo Workspaceは、この概念をコードレベルで強制する手段として機能します。まずは`internal`パッケージで始め、プロジェクトの成長に合わせてGo Workspaceへの移行を検討するのがおすすめです。
+
+連載の次回（#7）では**腐敗防止層（Anti-Corruption Layer）**を取り上げます。外部モデルを自コンテキストのモデルへ変換する設計パターンを紹介します。
+
+また、#8では複数コンテキストの関係を俯瞰する**コンテキストマップ**について解説します。
 
 ---
 

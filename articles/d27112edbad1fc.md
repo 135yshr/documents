@@ -168,7 +168,7 @@ internal/
 
 この構成なら、`inventory/internal/`は`catalog`からアクセスできず、コンパイルエラーになります。`infra/`はネストした`internal`の**外**に置きます。
 
-同じ`catalog/`のツリー内にある`catalog/infra/`は`catalog/internal/domain/`を参照できます。Goの`internal`ルールでは「`internal`の親ディレクトリのツリー内からのみインポート可能」とされており、`catalog/internal/`の親は`catalog/`です。同じ`catalog/`配下にある`catalog/infra/`からはアクセスできますが、`inventory/`は`catalog/`のツリー外なのでアクセスできません。コンテキスト間の通信は、`internal`の外に公開APIを設け連携させます。
+Goの`internal`ルールでは「`internal`の親ディレクトリのツリー内からのみインポート可能」とされており、`catalog/internal/`の親は`catalog/`です。そのため`catalog/infra/`からは`catalog/internal/domain/`にアクセスできますが、`inventory/`は`catalog/`のツリー外なのでアクセスできません。コンテキスト間の通信は、`internal`の外に公開APIを設け連携させます。
 
 ---
 
@@ -418,7 +418,7 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput)
 
 コンテキスト間の結合度をさらに下げたい場合は、ドメインイベントを使います。
 
-ドメインイベントは**発行する側のコンテキストが所有**します。`OrderPlaced`は注文コンテキストが発行するイベントなので、注文コンテキストが所有します。ただし、他コンテキストが購読できるよう、イベントスキーマはネストした`internal`の外に置く必要があります。`order/event/`に配置することで、在庫コンテキストから`"myapp/internal/order/event"`としてインポートできます。
+ドメインイベントは**発行する側のコンテキストが所有**します。`OrderPlaced`は注文コンテキストが発行するイベントであり、注文コンテキストがこれを所有します。ただし、他コンテキストが購読できるよう、イベントスキーマはネストした`internal`の外に置く必要があります。`order/event/`に配置することで、在庫コンテキストから`"myapp/internal/order/event"`としてインポートできます。
 
 ```go
 // order/event/order_placed.go  ← 注文コンテキストが所有（ネストした internal の外に置き、他コンテキストから参照可能）

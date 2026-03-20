@@ -151,16 +151,22 @@ type Stock struct {
 ```text
 internal/
     catalog/
-        internal/     # catalog のみアクセス可能
+        internal/         # catalog のみアクセス可能
             domain/
             usecase/
+        infra/            # ネストした internal の外に置く
+            postgres/
     inventory/
-        internal/     # inventory のみアクセス可能
+        internal/         # inventory のみアクセス可能
             domain/
             usecase/
+        infra/
+            postgres/
 ```
 
-この構成なら、`inventory/internal/`は`catalog`からアクセスできず、コンパイルエラーになります。コンテキスト間の通信が必要な場合は、各コンテキストの`internal`の外に公開APIを設け、明示的な連携層を経由させます。
+この構成なら、`inventory/internal/`は`catalog`からアクセスできず、コンパイルエラーになります。`infra/`はネストした`internal`の**外**に置きます。
+
+同じ`catalog/`のツリー内にある`catalog/infra/`は`catalog/internal/domain/`を参照できます。コンテキスト間の通信は、`internal`の外に公開APIを設け連携させます。
 
 ---
 
@@ -212,7 +218,8 @@ myapp/
 │           └── order_repo.go
 └── shared/
     ├── go.mod
-    └── money.go
+    ├── money.go
+    └── eventbus.go
 ```
 
 ### go.work ファイル
@@ -339,12 +346,17 @@ package usecase
 
 import (
     "context"
+    "time"
+    "myapp/internal/order/domain"
+    "myapp/internal/order/domain/event"
     "myapp/internal/order/port"
+    "myapp/pkg/shared"
 )
 
 type PlaceOrderUseCase struct {
     stockChecker port.StockChecker
     orderRepo    orderWriter
+    publisher    shared.EventPublisher
 }
 
 func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput) (*PlaceOrderOutput, error) {
@@ -355,10 +367,18 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput)
     if !available {
         return nil, ErrOutOfStock
     }
-    // 注文処理
     order := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)
     if err := uc.orderRepo.Save(ctx, order); err != nil {
         return nil, fmt.Errorf("注文の保存に失敗しました: %w", err)
+    }
+    e := &event.OrderPlaced{
+        DomainEvent: event.DomainEvent{ID: order.ID, OccurredAt: time.Now()},
+        OrderID:     order.ID,
+        ProductID:   input.ProductID,
+        Quantity:    input.Quantity,
+    }
+    if err := uc.publisher.Publish(ctx, e); err != nil {
+        return nil, fmt.Errorf("イベント発行に失敗しました: %w", err)
     }
     return &PlaceOrderOutput{OrderID: order.ID}, nil
 }
@@ -398,6 +418,10 @@ type OrderPlaced struct {
     Quantity  int
 }
 ```
+
+`EventPublisher`/`EventSubscriber`は例外的に`shared`に置きます。「どのコンテキストもイベントを発行・購読できる」というインフラの関心であり、`StockChecker`のようなドメイン知識は含みません。
+
+`PlaceOrderUseCase`は`EventPublisher`を依存性として受け取り、注文保存後にイベントを発行します。購読側の`HandleOrderPlaced`は起動時に`EventSubscriber`経由でハンドラを登録します。
 
 ```go
 // shared/eventbus.go  ← インフラ横断のインターフェースは shared に残す
@@ -439,12 +463,20 @@ func (h *HandleOrderPlaced) Handle(ctx context.Context, e any) error {
 }
 ```
 
+:::message
+
+**`any` 型と型安全性のトレードオフ**
+
+`Handle` の引数に `any` を使うと、コンパイラが型の不整合を検出できません。複数のイベント型を扱う場合は、型スイッチ（`switch e := e.(type) { case *event.OrderPlaced: ... }`）を使うと安全に処理を分岐できます。
+
+:::
+
 ### 境界を維持するためのチェックリスト
 
 モノレポでコンテキスト境界を維持するために、私は以下の点を意識しています。
 
 - **直接インポートの禁止**: コンテキスト間で`internal`パッケージを直接インポートしないようにします。ネストした`internal`構成であればコンパイラが検出しますが、より細かいルールを設けたい場合は[`depguard`](https://github.com/OpenPeeDeeP/depguard)などのlintツールをCIに組み込む方法もあります
-- **共有は最小限に**: `shared`パッケージには値オブジェクト（`Money`など）とインフラ横断インターフェースのみを配置します。インターフェースは消費者コンテキストが定義し、ドメインイベントは発行元コンテキストが所有します。
+- **共有は最小限に**: `shared`パッケージには値オブジェクト（`Money`など）とインフラ横断インターフェースのみを配置します。ドメインインターフェースは消費者コンテキストが定義し、ドメインイベントは発行元コンテキストが所有します。
 - **IDでの参照**: コンテキスト間でエンティティを参照する場合は、構造体の直接参照ではなくIDを使います
 - **命名の独立性**: 各コンテキストで同じ概念（商品、ユーザー等）に異なる名前を付けることを恐れないようにします。カタログの`Product`と在庫の`Stock`は別の型です
 

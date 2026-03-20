@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "97a587e54590",
+  "strategy": "manual-commit",
+  "branch": "fix/bounded-context-article-accuracy",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/d27112edbad1fc.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/97/a587e54590/0/metadata.json",
+      "transcript": "/97/a587e54590/0/full.jsonl",
+      "context": "/97/a587e54590/0/context.md",
+      "content_hash": "/97/a587e54590/0/content_hash.txt",
+      "prompt": "/97/a587e54590/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  }
+}

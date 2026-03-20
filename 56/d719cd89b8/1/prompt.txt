@@ -1,0 +1,402 @@
+Implement the following plan:
+
+# 修正計画: articles/d27112edbad1fc.md（境界づけられたコンテキスト記事）
+
+## Context
+
+DDD境界づけられたコンテキスト記事に対するコードレビューで、8件の問題が指摘された。
+最大の課題はパターン2（ドメインイベント）セクションの整合性で、
+「inventoryがorderのinternalパッケージをインポートしている」という記事自身のチェックリストとの矛盾が最も深刻。
+
+## 対象ファイル
+
+`articles/d27112edbad1fc.md`（500行強のMarkdown）
+
+---
+
+## 修正一覧
+
+### 🔴 重大（3件）
+
+#### 修正1: inventory が order/internal をインポートしている問題を解消
+
+**問題箇所**:
+- 線447-449: `import "myapp/internal/order/domain/event"` ← 記事チェックリスト違反
+- 線399: 「ドメインイベントは発行する側のコンテキストが所有」
+
+**方針**: イベント定義を order のネスト internal の「外」の公開APIに移動。
+`order/domain/event/` → `order/event/` （ネストinternalの外に公開パッケージとして配置）
+
+**変更内容**:
+1. ディレクトリ構成図（66-107行）に `order/event/` を追加（`port/` と同列）
+2. コードブロック `order_placed.go` のpackage宣言をそのままに、パスのみ変更
+   `// order/event/order_placed.go  ← publicなイベントスキーマ（ネストinternalの外）`
+3. `handle_order_placed.go` のimportを `"myapp/internal/order/event"` に変更
+4. 説明文（399行付近）に「イベントスキーマは発行元コンテキストが所有しますが、他コンテキストが購読できるよう public なパッケージ（ネストした internal の外）に置きます」を追記
+
+#### 修正2: EventPublisher/EventSubscriber の shared 配置とチェックリストの矛盾を解消
+
+**問題箇所**:
+- 線422: 「インフラ横断のインターフェースは shared に残す」（理由が不明確）
+- 線479: 「ドメインインターフェースは消費者コンテキストが定義し」（shared配置と矛盾に見える）
+
+**方針**: 判断基準を明文化して矛盾を解消。
+
+**変更内容**:
+1. 422行付近の説明文を拡充。判断基準を追加:
+   「shared に置く条件: 実装（EventBus等）が複数コンテキストにまたがって共有される場合。
+   StockChecker のように一方のコンテキストだけが使うインターフェースは消費者側に置く。」
+2. チェックリスト（479行）の文言を修正:
+   「ドメインインターフェースは消費者コンテキストが定義します。ただし EventPublisher/EventSubscriber のようにインフラ実装を複数コンテキストが共有する場合は shared が適切です。」
+
+#### 修正3: イベント発行〜購読の接続コードが欠落している問題
+
+**問題箇所**:
+- `PlaceOrderUseCase` に `publisher` フィールドはあるが、`HandleOrderPlaced` の登録コードがない
+
+**方針**: `main.go` か DI 初期化スニペットを追加し、全体の流れを示す。
+
+**変更内容**:
+`HandleOrderPlaced` の後ろ（現465行付近）に以下のコードブロックを追加:
+
+```go
+// cmd/server/main.go（初期化例）
+eventBus := infra.NewInMemoryEventBus()
+
+// ハンドラを登録
+handler := inventory.NewHandleOrderPlaced(stockRepo)
+eventBus.Subscribe(ctx, "OrderPlaced", handler.Handle)
+
+// PlaceOrderUseCase に EventPublisher を注入
+placeOrder := order.NewPlaceOrderUseCase(stockChecker, orderRepo, eventBus)
+```
+
+説明文: 「EventSubscriber.Subscribe でハンドラを登録し、同じ eventBus を PlaceOrderUseCase に注入することで発行〜購読が繋がります。」
+
+---
+
+### 🟠 設計上の問題（3件）
+
+#### 修正4: ネスト internal + infra のアクセスルールの説明を明確化
+
+**問題箇所**: 151-169行。167-169行に「catalog/infra/ は catalog/internal/domain/ を参照できます」と正しい記述はあるが、なぜできるのかが不明。
+
+**変更内容**:
+169行の説明に補足を追加:
+「Go の internal ルールでは「`internal` の親ディレクトリのツリー内からのみインポート可能」です。
+`catalog/internal/` の親は `catalog/` なので、同じ `catalog/` 配下にある `catalog/infra/` からはアクセスできます。
+一方 `inventory/` は `catalog/` のツリー外なのでアクセスできません。」
+
+#### 修正5: Go Workspace の `replace` ディレクティブとの違いを追記
+
+**問題箇所**: 260-271行の比較表と説明。
+
+**変更内容**:
+271行付近の文章に以下を追加:
+「なお、`go.work` がない場合も各モジュールの `go.mod` に `replace` ディレクティブを書けばローカルで複数モジュールを同時編集できます。Go Workspace の利点は「`replace` を書かずに済む」こと、そして `go.work` を `.gitignore` に追加することで開発者ごとの柔軟性を保てる点にあります。」
+
+#### 修正6: NewOrder に不変条件チェックを追加（連載との整合）
+
+**問題箇所**: 370行 `order := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)`
+
+**変更内容**:
+コードを以下に変更しつつ、集約記事への参照を注記で追加:
+
+```go
+order, err := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)
+if err != nil {
+    return nil, err // 不変条件違反（数量0以下など）
+}
+```
+
+ただし `domain.NewOrder` の実装コードは追加しない（集約記事が詳細を扱うため）。
+代わりに注記: 「`NewOrder` の実装と不変条件の詳細は連載 #4（集約の設計）を参照してください。」
+
+---
+
+### 🟡 説明の不足（2件）
+
+#### 修正7: DomainEvent 基底型の配置方針を明記
+
+**問題箇所**: 407-411行の `DomainEvent` 構造体（order/event/ 内に定義）。
+
+**変更内容**:
+コードブロックの後に注記を追加:
+「`DomainEvent` のような基底型は複数コンテキストで再定義するか、`pkg/shared/` に置くかを検討します。
+この記事ではコンテキストごとに独立した基底型を持つシンプルなアプローチを採用しています。
+プロジェクト全体での統一が必要な場合は `pkg/shared/` への配置も選択肢です。」
+
+#### 修正8: any 型のトレードオフにジェネリクス代替案を追記
+
+**問題箇所**: 466-472行の `any 型と型安全性のトレードオフ` メッセージボックス。
+
+**変更内容**:
+既存の型スイッチの説明に加え、以下を追記:
+「Go 1.18+ のジェネリクスを使うと型安全なインターフェースを定義できます:
+`type TypedHandler[E any] interface { Handle(ctx context.Context, event E) error }`
+ただしGo のインターフェースはジェネリクスを直接持てないため、実装が複雑になります。
+実務では型スイッチによる明示的な分岐と、不正な型を受け取った際のエラーログ記録を組み合わせる方法が現実的です。」
+
+---
+
+## 修正の優先順位と実施順序
+
+1. **修正1**（directory構造変更 + import変更）→ 他の修正の前提
+2. **修正2**（チェックリスト矛盾の解消）
+3. **修正3**（接続コード追加）
+4. **修正4〜8**（説明改善）
+
+## 検証方法
+
+- `npm run lint` で markdownlint エラーがないことを確認
+- `npm run lint:text` で textlint エラーがないことを確認
+- `npm run fmt -- --check` で Prettier 整形済みであることを確認
+- コードブロック内のimportパスが記事内で一貫していることを目視確認
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/d53e9edd-c5c4-40a1-98fe-8ed86ca05b04.jsonl
+
+If this plan can be broken down into multiple independent tasks, consider using the TeamCreate tool to create a team and parallelize the work.
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)
+
+---
+
+前回からの改善状況を確認した上で、残っている問題を指摘します。
+
+---
+
+## 前回からの修正状況
+
+ほぼすべての指摘が対処されています。
+
+- ✅ `shared` のインターフェース配置に判断基準を明記（439行目）
+- ✅ `EventPublisher` を `PlaceOrderUseCase` に注入し、イベント発行コードを追加
+- ✅ `main.go` の初期化例で発行〜購読の接続を図示
+- ✅ ネスト `internal` に `infra/` を外に配置する構成を明示
+- ✅ `DomainEvent` 基底型の配置方針を注記
+- ✅ `any` 型のトレードオフ・ジェネリクス代替案を補足
+- ✅ `NewOrder` にエラー戻り値を追加し、連載#4への参照を追記
+- ✅ `go.work` と `replace` の違いを説明
+
+品質は大幅に向上しています。以下、新たに気づいた問題と、まだ残っている問題です。
+
+---
+
+### 🔴 重大な問題
+
+**1. 注文保存とイベント発行の「二重書き込み（Dual Write）」問題**
+
+376〜387行目：
+
+```go
+if err := uc.orderRepo.Save(ctx, order); err != nil { ... }
+// ↓ ここで障害が起きたら？
+if err := uc.publisher.Publish(ctx, e); err != nil { ... }
+```
+
+`Save` が成功した後に `Publish` が失敗すると、注文は永続化されたのにイベントが発行されず、在庫が減りません。これは分散システムにおける典型的な「Dual Write」問題です。TOCTOU注記は書かれていますが、この問題はTOCTOUとは別の障害パターンです。
+
+Outboxパターン（注文と同じトランザクションでイベントをDBに書き込み、別プロセスで配信する）や、少なくとも「インメモリのEventBusではこの問題は顕在化しにくいが、分散環境では追加の考慮が必要」という注記が必要です。
+
+---
+
+**2. `inventory` が `order` の内部パッケージを直接インポートしている**
+
+466行目：
+
+```go
+import "myapp/internal/order/event"
+```
+
+511行目のチェックリストで「コンテキスト間で `internal` パッケージを直接インポートしない」と書かれていますが、このコードがまさにそれを行っています。
+
+410行目の説明では「ネストした `internal` の外に置く」としてこの構成を正当化していますが、コード例はフラットな `internal` 構成であり、ネストした `internal` は使っていません。フラット構成で `order/event/` はたしかにGoのコンパイラ上はアクセス可能ですが、チェックリストの「直接インポートの禁止」ルールとの矛盾が残ります。チェックリスト側を「**コンテキストの `internal` パッケージ（domain/usecase）を直接インポートしない。公開API（event/port）のみ許可する**」のように修正するか、区別を明確にすべきです。
+
+---
+
+### 🟠 設計上の問題
+
+**3. `DomainEvent.ID` に `order.ID` を代入している**
+
+380行目：
+
+```go
+DomainEvent: event.DomainEvent{ID: order.ID, OccurredAt: time.Now()},
+OrderID:     order.ID,
+```
+
+`DomainEvent.ID` はイベント自体の一意識別子であるべきですが、ここでは注文IDを入れています。`OrderID` フィールドが別に存在するため、2つのフィールドに同じ値が入り、イベントIDと注文IDが混同されます。イベントIDは `uuid.New().String()` などで独立して生成すべきです。
+
+---
+
+**4. `HandleOrderPlaced` が在庫不足をチェックせずに減算している**
+
+479行目：
+
+```go
+return h.stockRepo.Decrease(ctx, placed.ProductID, placed.Quantity)
+```
+
+TOCTOU注記で「別の注文が在庫を消費する可能性」に触れていますが、ハンドラ側で在庫不足時の振る舞い（エラー返却、補償トランザクション、アラート発報等）が一切考慮されていません。`Decrease` が在庫0以下になる場合にどうなるかが不明で、負の在庫を許容するのかどうかの設計判断が示されていません。
+
+---
+
+**5. イベント購読の文字列ベースルーティングが脆弱**
+
+491行目：
+
+```go
+eventBus.Subscribe(ctx, "OrderPlaced", handler.Handle)
+```
+
+マジックストリング `"OrderPlaced"` で購読していますが、`Publish` 側ではどのようにイベント型を文字列に変換するのかが示されていません。EventBusの実装がリフレクションで型名を取得するのか、イベント側が `EventType() string` メソッドを持つのかが不明です。この文字列がずれるとイベントが静かに消失するため、型ベースのルーティングか定数定義への言及が必要です。
+
+---
+
+### 🟡 軽微な指摘
+
+**6. パターン1とパターン2が混在した `PlaceOrderUseCase`**
+
+現在の `PlaceOrderUseCase` は `StockChecker`（パターン1：同期連携）と `EventPublisher`（パターン2：非同期連携）の両方を持っています。記事の構成では「パターン1：共有インターフェースによる連携」セクション内にこのコードがありますが、実際にはパターン2のイベント発行も含んでいます。読者はパターン1と2を比較検討したいのに、コード例が両方を混ぜているため、それぞれのトレードオフが見えにくくなっています。
+
+---
+
+### 総括
+
+| 問題 | 重大度 |
+|---|---|
+| Dual Write問題への注記欠落 | 🔴 |
+| チェックリストと実際のimportの矛盾 | 🔴 |
+| `DomainEvent.ID` の値が `order.ID` と重複 | 🟠 |
+| 在庫減算時のバリデーション欠如 | 🟠 |
+| 文字列ベースのイベントルーティング | 🟠 |
+| パターン1と2の混在 | 🟡 |
+
+前回から最も大きく改善されたのは「イベントの発行〜購読の全体像が見えるようになった」点です。残る最大の課題は、その全体像の中にある**Dual Write問題**と、**チェックリストの文言とコード例の不一致**の2点です。
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

@@ -91,9 +91,9 @@ myapp/
 │   └── order/            # 注文コンテキスト
 │       ├── domain/
 │       │   ├── order.go
-│       │   ├── order_item.go
-│       │   └── event/
-│       │       └── order_placed.go
+│       │   └── order_item.go
+│       ├── event/        # 公開イベントスキーマ（コンテキスト外からも参照可）
+│       │   └── order_placed.go
 │       ├── port/
 │       │   └── stock_checker.go
 │       ├── usecase/
@@ -166,7 +166,7 @@ internal/
 
 この構成なら、`inventory/internal/`は`catalog`からアクセスできず、コンパイルエラーになります。`infra/`はネストした`internal`の**外**に置きます。
 
-同じ`catalog/`のツリー内にある`catalog/infra/`は`catalog/internal/domain/`を参照できます。コンテキスト間の通信は、`internal`の外に公開APIを設け連携させます。
+同じ`catalog/`のツリー内にある`catalog/infra/`は`catalog/internal/domain/`を参照できます。Goの`internal`ルールでは「`internal`の親ディレクトリのツリー内からのみインポート可能」とされており、`catalog/internal/`の親は`catalog/`です。同じ`catalog/`配下にある`catalog/infra/`からはアクセスできますが、`inventory/`は`catalog/`のツリー外なのでアクセスできません。コンテキスト間の通信は、`internal`の外に公開APIを設け連携させます。
 
 ---
 
@@ -270,6 +270,8 @@ require myapp/shared v0.0.0
 
 小規模なプロジェクトでは`internal`パッケージで十分です。チームが複数に分かれ、各コンテキストの開発サイクルが異なる場合にGo Workspaceへの移行を検討します。特に「チームが独立してデプロイする必要がある」場合は、モジュール分割が有効です。逆に、デプロイが常にモノリシックであれば、`internal`パッケージによるアクセス制御で十分な境界を保てます。
 
+なお、`go.work`がない場合も各モジュールの`go.mod`に`replace`ディレクティブを書けばローカルで複数モジュールを同時編集できます。Go Workspaceの利点は「`replace`を書かずに済む」こと、そして`go.work`を`.gitignore`に追加することで開発者ごとの柔軟性を保てる点にあります。
+
 ---
 
 ## モノレポでのコンテキスト境界の引き方
@@ -348,7 +350,7 @@ import (
     "context"
     "time"
     "myapp/internal/order/domain"
-    "myapp/internal/order/domain/event"
+    "myapp/internal/order/event"
     "myapp/internal/order/port"
     "myapp/pkg/shared"
 )
@@ -367,7 +369,10 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput)
     if !available {
         return nil, ErrOutOfStock
     }
-    order := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)
+    order, err := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)
+    if err != nil {
+        return nil, err // 不変条件違反（数量0以下など）
+    }
     if err := uc.orderRepo.Save(ctx, order); err != nil {
         return nil, fmt.Errorf("注文の保存に失敗しました: %w", err)
     }
@@ -386,6 +391,12 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput)
 
 :::message
 
+`NewOrder`の実装と不変条件の詳細は連載 #4（集約の設計）を参照してください。
+
+:::
+
+:::message
+
 **TOCTOU（Time-of-check/Time-of-use）に注意**
 
 在庫確認（`IsAvailable`）と注文保存（`orderRepo.Save`）は別トランザクションです。確認後から保存までの間に別の注文が在庫を消費する可能性があります。高トラフィック環境では、楽観ロック（バージョン番号による競合検出）や Saga パターンなど、整合性を保つ追加の仕組みが必要です。
@@ -396,10 +407,10 @@ func (uc *PlaceOrderUseCase) Execute(ctx context.Context, input PlaceOrderInput)
 
 コンテキスト間の結合度をさらに下げたい場合は、ドメインイベントを使います。
 
-ドメインイベントは**発行する側のコンテキストが所有**します。`OrderPlaced`は注文コンテキストが発行するイベントなので、`order/domain/event/`に定義します。在庫コンテキストはそのパッケージをインポートして購読します。
+ドメインイベントは**発行する側のコンテキストが所有**します。`OrderPlaced`は注文コンテキストが発行するイベントなので、注文コンテキストが所有します。ただし、他コンテキストが購読できるよう、イベントスキーマはネストした`internal`の外に置く必要があります。`order/event/`に配置することで、在庫コンテキストから`"myapp/internal/order/event"`としてインポートできます。
 
 ```go
-// order/domain/event/order_placed.go  ← 注文コンテキストが所有
+// order/event/order_placed.go  ← 注文コンテキストが所有（ネストした internal の外に置き、他コンテキストから参照可能）
 package event
 
 import "time"
@@ -419,7 +430,13 @@ type OrderPlaced struct {
 }
 ```
 
-`EventPublisher`/`EventSubscriber`は例外的に`shared`に置きます。「どのコンテキストもイベントを発行・購読できる」というインフラの関心であり、`StockChecker`のようなドメイン知識は含みません。
+:::message
+
+`DomainEvent`のような基底型は複数コンテキストで独立して再定義するか、`pkg/shared/`に置くかを検討します。この記事ではコンテキストごとに独立した基底型を持つシンプルなアプローチを採用しています。プロジェクト全体で基底型を統一したい場合は`pkg/shared/`への配置も選択肢です。
+
+:::
+
+`EventPublisher`/`EventSubscriber`は`shared`に置きます。判断基準は「インターフェースの実装（EventBus等）を複数コンテキストが共有するかどうか」です。EventBusは全コンテキストに注入されるインフラ実装であるため`shared`が適切です。一方、`StockChecker`は在庫コンテキストだけが実装を提供するため、消費者である注文コンテキスト側で定義します。
 
 `PlaceOrderUseCase`は`EventPublisher`を依存性として受け取り、注文保存後にイベントを発行します。購読側の`HandleOrderPlaced`は起動時に`EventSubscriber`経由でハンドラを登録します。
 
@@ -446,7 +463,7 @@ package usecase
 
 import (
     "context"
-    "myapp/internal/order/domain/event"
+    "myapp/internal/order/event"
 )
 
 type HandleOrderPlaced struct {
@@ -463,11 +480,27 @@ func (h *HandleOrderPlaced) Handle(ctx context.Context, e any) error {
 }
 ```
 
+EventSubscriberの`Subscribe`でハンドラを登録し、同じ`eventBus`を`PlaceOrderUseCase`に注入することで発行〜購読が繋がります。
+
+```go
+// cmd/server/main.go（初期化例）
+eventBus := infra.NewInMemoryEventBus()
+
+// ハンドラを登録
+handler := inventory.NewHandleOrderPlaced(stockRepo)
+eventBus.Subscribe(ctx, "OrderPlaced", handler.Handle)
+
+// PlaceOrderUseCase に EventPublisher を注入
+placeOrder := order.NewPlaceOrderUseCase(stockChecker, orderRepo, eventBus)
+```
+
 :::message
 
 **`any` 型と型安全性のトレードオフ**
 
 `Handle` の引数に `any` を使うと、コンパイラが型の不整合を検出できません。複数のイベント型を扱う場合は、型スイッチ（`switch e := e.(type) { case *event.OrderPlaced: ... }`）を使うと安全に処理を分岐できます。
+
+Go 1.18+ のジェネリクスを使うと型安全なインターフェースを定義できます。`type TypedHandler[E any] interface { Handle(ctx context.Context, event E) error }` のようなイメージです。ただし、Goのインターフェースはジェネリクスの型パラメータを直接持てないため、実装が複雑になります。実務では型スイッチによる明示的な分岐と、不正な型を受け取った際のエラーログ記録を組み合わせる方法が現実的です。
 
 :::
 
@@ -476,7 +509,7 @@ func (h *HandleOrderPlaced) Handle(ctx context.Context, e any) error {
 モノレポでコンテキスト境界を維持するために、私は以下の点を意識しています。
 
 - **直接インポートの禁止**: コンテキスト間で`internal`パッケージを直接インポートしないようにします。ネストした`internal`構成であればコンパイラが検出しますが、より細かいルールを設けたい場合は[`depguard`](https://github.com/OpenPeeDeeP/depguard)などのlintツールをCIに組み込む方法もあります
-- **共有は最小限に**: `shared`パッケージには値オブジェクト（`Money`など）とインフラ横断インターフェースのみを配置します。ドメインインターフェースは消費者コンテキストが定義し、ドメインイベントは発行元コンテキストが所有します。
+- **共有は最小限に**: `shared`パッケージには値オブジェクト（`Money`など）とインフラ横断インターフェースのみを配置します。ドメインインターフェースは消費者コンテキストが定義します。ただし`EventPublisher`/`EventSubscriber`のようにインフラ実装を複数コンテキストが共有する場合は`shared`が適切です。ドメインイベントは発行元コンテキストが所有し、他コンテキストから参照できる公開パッケージに置きます。
 - **IDでの参照**: コンテキスト間でエンティティを参照する場合は、構造体の直接参照ではなくIDを使います
 - **命名の独立性**: 各コンテキストで同じ概念（商品、ユーザー等）に異なる名前を付けることを恐れないようにします。カタログの`Product`と在庫の`Stock`は別の型です
 

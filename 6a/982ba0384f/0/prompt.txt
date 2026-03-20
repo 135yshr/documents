@@ -1,0 +1,168 @@
+Implement the following plan:
+
+# 計画: 境界づけられたコンテキスト記事のDDD設計修正
+
+## Context
+
+記事 `articles/d27112edbad1fc.md`（DDD/CA連載 #6）のコード例で、`shared` パッケージに
+`StockChecker` インターフェースと `OrderPlaced` イベントを置いているが、これは共有カーネルの
+誤用である。DIPの原則に従い、インターフェースはそれを必要とするコンテキストが所有すべきで、
+ドメインイベントは発行元コンテキストが所有すべき。
+
+## 修正対象ファイル
+
+- `articles/d27112edbad1fc.md`（単一ファイルの修正のみ）
+
+---
+
+## 変更内容
+
+### パターン1（共有インターフェースによる連携）の修正
+
+**Before**: `shared/stockchecker.go` に `StockChecker` インターフェース
+
+**After**:
+1. `order/port/stock_checker.go` に `StockChecker` を定義（注文コンテキストが所有）
+2. `inventory/adapter/order_stock_checker.go` が実装（在庫コンテキストが提供）
+3. `order/usecase/place_order.go` は `myapp/internal/order/port` をインポート
+4. コード例に TOCTOU 注記を追加（在庫確認→注文保存の間に競合が起きうる旨）
+
+```go
+// order/port/stock_checker.go  ← 注文コンテキスト内に定義
+package port
+
+type StockChecker interface {
+    IsAvailable(ctx context.Context, productID string, quantity int) (bool, error)
+}
+```
+
+```go
+// inventory/adapter/order_stock_checker.go  ← 在庫コンテキストが実装
+package adapter
+
+type OrderStockChecker struct { stockRepo stockReader }
+
+func (c *OrderStockChecker) IsAvailable(...) (bool, error) { ... }
+```
+
+### パターン2（ドメインイベント）の修正
+
+**Before**: `shared/event.go` に `DomainEvent`, `OrderPlaced` を定義
+
+**After**:
+1. `order/domain/event/order_placed.go` に `DomainEvent`, `OrderPlaced` を定義（注文コンテキスト所有）
+2. `inventory/usecase/handle_order_placed.go` は `myapp/internal/order/domain/event` をインポート
+3. `EventPublisher` / `EventSubscriber` は `shared` に残す（インフラ横断の純粋インターフェース）
+
+```go
+// order/domain/event/order_placed.go
+package event
+
+type OrderPlaced struct { ... }  // 注文コンテキストが発行するイベント
+```
+
+### `shared` パッケージに残すもの
+
+- `Money`（値オブジェクト: 複数コンテキストで同一の意味を持つ）
+- `EventPublisher` / `EventSubscriber`（インフラ横断のインターフェース）
+
+削除（各コンテキストへ移動）:
+- `StockChecker` → `order/port/`
+- `DomainEvent`, `OrderPlaced` → `order/domain/event/`
+
+### 説明文の追記
+
+- パターン1の前に「インターフェースは消費者（注文コンテキスト）が定義し、提供者（在庫コンテキスト）が実装する」旨の一段落
+- パターン1のコード例後に TOCTOU 注記（「在庫確認と注文保存は別トランザクションのため、高トラフィック下では楽観ロックや Saga パターンが必要」）
+- Go Workspace の使い分け表の下に判断基準を追記（チームが独立してデプロイする必要がある場合のみ）
+- まとめの後に連載の関連記事（#7 ACL、#8 コンテキストマップ）への言及を追記
+
+---
+
+## 修正の優先順位
+
+| 修正 | 必須 |
+|------|------|
+| StockChecker を order/port/ へ移動 | ✅ 必須 |
+| OrderPlaced を order/domain/event/ へ移動 | ✅ 必須 |
+| inventory/adapter/ の実装例追加 | ✅ 必須（設計の全体像を見せるため） |
+| TOCTOU 注記 | ✅ 必須 |
+| Go Workspace 判断基準の追記 | 🔵 推奨 |
+| 連載リンクの追記 | 🔵 推奨 |
+
+---
+
+## 検証
+
+1. `npx textlint articles/d27112edbad1fc.md` → エラーなし
+2. `npx markdownlint-cli2 articles/d27112edbad1fc.md` → エラーなし
+3. `npx prettier --write articles/d27112edbad1fc.md` → 変更なし（整形済み）
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/e5f32201-1874-4d25-8abf-daec7e18ccd2.jsonl
+
+If this plan can be broken down into multiple independent tasks, consider using the TeamCreate tool to create a team and parallelize the work.
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

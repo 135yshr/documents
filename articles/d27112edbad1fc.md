@@ -85,6 +85,8 @@ myapp/
 │   │   │   └── warehouse.go
 │   │   ├── usecase/
 │   │   │   └── adjust_stock.go
+│   │   ├── adapter/      # 他コンテキストのインターフェースを実装するアダプター
+│   │   │   └── order_stock_checker.go
 │   │   └── infra/
 │   │       └── postgres/
 │   │           └── stock_repo.go
@@ -280,7 +282,7 @@ require myapp/shared v0.0.0
 
 ### コンテキスト間の通信パターン
 
-コンテキスト間で通信が必要な場合、いくつかのパターンがあります。
+コンテキスト間で通信が必要な場合、いくつかのパターンがあります。なお、以降のコード例では読みやすさを優先し、一部の`import`宣言や型定義を省略しています。
 
 ```mermaid
 graph TB
@@ -495,14 +497,20 @@ EventSubscriberの`Subscribe`でハンドラを登録し、同じ`eventBus`を`P
 
 ```go
 // cmd/server/main.go（初期化例）
+import (
+    inventoryUsecase "myapp/internal/inventory/usecase"
+    orderUsecase     "myapp/internal/order/usecase"
+    "myapp/infra"
+)
+
 eventBus := infra.NewInMemoryEventBus()
 
 // ハンドラを登録
-handler := inventory.NewHandleOrderPlaced(stockRepo)
+handler := inventoryUsecase.NewHandleOrderPlaced(stockRepo)
 eventBus.Subscribe(ctx, "OrderPlaced", handler.Handle) // イベント型名を文字列で指定
 
 // PlaceOrderUseCase に EventPublisher を注入
-placeOrder := order.NewPlaceOrderUseCase(stockChecker, orderRepo, eventBus)
+placeOrder := orderUsecase.NewPlaceOrderUseCase(stockChecker, orderRepo, eventBus)
 ```
 
 :::message

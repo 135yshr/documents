@@ -3,7 +3,7 @@
   "checkpoint_id": "a5dfbb513677",
   "strategy": "manual-commit",
   "branch": "fix/bounded-context-article-accuracy",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     "articles/d27112edbad1fc.md"
   ],
@@ -14,13 +14,20 @@
       "context": "/a5/dfbb513677/0/context.md",
       "content_hash": "/a5/dfbb513677/0/content_hash.txt",
       "prompt": "/a5/dfbb513677/0/prompt.txt"
+    },
+    {
+      "metadata": "/a5/dfbb513677/1/metadata.json",
+      "transcript": "/a5/dfbb513677/1/full.jsonl",
+      "context": "/a5/dfbb513677/1/context.md",
+      "content_hash": "/a5/dfbb513677/1/content_hash.txt",
+      "prompt": "/a5/dfbb513677/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 0,
-    "cache_creation_tokens": 0,
-    "cache_read_tokens": 0,
-    "output_tokens": 0,
-    "api_call_count": 0
+    "input_tokens": 34,
+    "cache_creation_tokens": 61394,
+    "cache_read_tokens": 2043670,
+    "output_tokens": 12846,
+    "api_call_count": 31
   }
 }

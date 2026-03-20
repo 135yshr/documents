@@ -1,0 +1,223 @@
+Implement the following plan:
+
+# 修正計画: articles/d27112edbad1fc.md（境界づけられたコンテキスト記事）
+
+## Context
+
+DDD境界づけられたコンテキスト記事に対するコードレビューで、8件の問題が指摘された。
+最大の課題はパターン2（ドメインイベント）セクションの整合性で、
+「inventoryがorderのinternalパッケージをインポートしている」という記事自身のチェックリストとの矛盾が最も深刻。
+
+## 対象ファイル
+
+`articles/d27112edbad1fc.md`（500行強のMarkdown）
+
+---
+
+## 修正一覧
+
+### 🔴 重大（3件）
+
+#### 修正1: inventory が order/internal をインポートしている問題を解消
+
+**問題箇所**:
+- 線447-449: `import "myapp/internal/order/domain/event"` ← 記事チェックリスト違反
+- 線399: 「ドメインイベントは発行する側のコンテキストが所有」
+
+**方針**: イベント定義を order のネスト internal の「外」の公開APIに移動。
+`order/domain/event/` → `order/event/` （ネストinternalの外に公開パッケージとして配置）
+
+**変更内容**:
+1. ディレクトリ構成図（66-107行）に `order/event/` を追加（`port/` と同列）
+2. コードブロック `order_placed.go` のpackage宣言をそのままに、パスのみ変更
+   `// order/event/order_placed.go  ← publicなイベントスキーマ（ネストinternalの外）`
+3. `handle_order_placed.go` のimportを `"myapp/internal/order/event"` に変更
+4. 説明文（399行付近）に「イベントスキーマは発行元コンテキストが所有しますが、他コンテキストが購読できるよう public なパッケージ（ネストした internal の外）に置きます」を追記
+
+#### 修正2: EventPublisher/EventSubscriber の shared 配置とチェックリストの矛盾を解消
+
+**問題箇所**:
+- 線422: 「インフラ横断のインターフェースは shared に残す」（理由が不明確）
+- 線479: 「ドメインインターフェースは消費者コンテキストが定義し」（shared配置と矛盾に見える）
+
+**方針**: 判断基準を明文化して矛盾を解消。
+
+**変更内容**:
+1. 422行付近の説明文を拡充。判断基準を追加:
+   「shared に置く条件: 実装（EventBus等）が複数コンテキストにまたがって共有される場合。
+   StockChecker のように一方のコンテキストだけが使うインターフェースは消費者側に置く。」
+2. チェックリスト（479行）の文言を修正:
+   「ドメインインターフェースは消費者コンテキストが定義します。ただし EventPublisher/EventSubscriber のようにインフラ実装を複数コンテキストが共有する場合は shared が適切です。」
+
+#### 修正3: イベント発行〜購読の接続コードが欠落している問題
+
+**問題箇所**:
+- `PlaceOrderUseCase` に `publisher` フィールドはあるが、`HandleOrderPlaced` の登録コードがない
+
+**方針**: `main.go` か DI 初期化スニペットを追加し、全体の流れを示す。
+
+**変更内容**:
+`HandleOrderPlaced` の後ろ（現465行付近）に以下のコードブロックを追加:
+
+```go
+// cmd/server/main.go（初期化例）
+eventBus := infra.NewInMemoryEventBus()
+
+// ハンドラを登録
+handler := inventory.NewHandleOrderPlaced(stockRepo)
+eventBus.Subscribe(ctx, "OrderPlaced", handler.Handle)
+
+// PlaceOrderUseCase に EventPublisher を注入
+placeOrder := order.NewPlaceOrderUseCase(stockChecker, orderRepo, eventBus)
+```
+
+説明文: 「EventSubscriber.Subscribe でハンドラを登録し、同じ eventBus を PlaceOrderUseCase に注入することで発行〜購読が繋がります。」
+
+---
+
+### 🟠 設計上の問題（3件）
+
+#### 修正4: ネスト internal + infra のアクセスルールの説明を明確化
+
+**問題箇所**: 151-169行。167-169行に「catalog/infra/ は catalog/internal/domain/ を参照できます」と正しい記述はあるが、なぜできるのかが不明。
+
+**変更内容**:
+169行の説明に補足を追加:
+「Go の internal ルールでは「`internal` の親ディレクトリのツリー内からのみインポート可能」です。
+`catalog/internal/` の親は `catalog/` なので、同じ `catalog/` 配下にある `catalog/infra/` からはアクセスできます。
+一方 `inventory/` は `catalog/` のツリー外なのでアクセスできません。」
+
+#### 修正5: Go Workspace の `replace` ディレクティブとの違いを追記
+
+**問題箇所**: 260-271行の比較表と説明。
+
+**変更内容**:
+271行付近の文章に以下を追加:
+「なお、`go.work` がない場合も各モジュールの `go.mod` に `replace` ディレクティブを書けばローカルで複数モジュールを同時編集できます。Go Workspace の利点は「`replace` を書かずに済む」こと、そして `go.work` を `.gitignore` に追加することで開発者ごとの柔軟性を保てる点にあります。」
+
+#### 修正6: NewOrder に不変条件チェックを追加（連載との整合）
+
+**問題箇所**: 370行 `order := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)`
+
+**変更内容**:
+コードを以下に変更しつつ、集約記事への参照を注記で追加:
+
+```go
+order, err := domain.NewOrder(input.ProductID, input.Quantity, input.UnitPrice)
+if err != nil {
+    return nil, err // 不変条件違反（数量0以下など）
+}
+```
+
+ただし `domain.NewOrder` の実装コードは追加しない（集約記事が詳細を扱うため）。
+代わりに注記: 「`NewOrder` の実装と不変条件の詳細は連載 #4（集約の設計）を参照してください。」
+
+---
+
+### 🟡 説明の不足（2件）
+
+#### 修正7: DomainEvent 基底型の配置方針を明記
+
+**問題箇所**: 407-411行の `DomainEvent` 構造体（order/event/ 内に定義）。
+
+**変更内容**:
+コードブロックの後に注記を追加:
+「`DomainEvent` のような基底型は複数コンテキストで再定義するか、`pkg/shared/` に置くかを検討します。
+この記事ではコンテキストごとに独立した基底型を持つシンプルなアプローチを採用しています。
+プロジェクト全体での統一が必要な場合は `pkg/shared/` への配置も選択肢です。」
+
+#### 修正8: any 型のトレードオフにジェネリクス代替案を追記
+
+**問題箇所**: 466-472行の `any 型と型安全性のトレードオフ` メッセージボックス。
+
+**変更内容**:
+既存の型スイッチの説明に加え、以下を追記:
+「Go 1.18+ のジェネリクスを使うと型安全なインターフェースを定義できます:
+`type TypedHandler[E any] interface { Handle(ctx context.Context, event E) error }`
+ただしGo のインターフェースはジェネリクスを直接持てないため、実装が複雑になります。
+実務では型スイッチによる明示的な分岐と、不正な型を受け取った際のエラーログ記録を組み合わせる方法が現実的です。」
+
+---
+
+## 修正の優先順位と実施順序
+
+1. **修正1**（directory構造変更 + import変更）→ 他の修正の前提
+2. **修正2**（チェックリスト矛盾の解消）
+3. **修正3**（接続コード追加）
+4. **修正4〜8**（説明改善）
+
+## 検証方法
+
+- `npm run lint` で markdownlint エラーがないことを確認
+- `npm run lint:text` で textlint エラーがないことを確認
+- `npm run fmt -- --check` で Prettier 整形済みであることを確認
+- コードブロック内のimportパスが記事内で一貫していることを目視確認
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/135yshr/.claude/projects/-Users-135yshr-projects-135yshr-documents/d53e9edd-c5c4-40a1-98fe-8ed86ca05b04.jsonl
+
+If this plan can be broken down into multiple independent tasks, consider using the TeamCreate tool to create a team and parallelize the work.
+
+---
+
+# Smart Commit with Gitmoji
+
+Execute the following steps non-interactively:
+
+## Branch Management
+
+- If currently on `main` or `master` branch, create and checkout a new feature branch with a descriptive name
+- If on any other branch, proceed with commit on current branch (no branch creation)
+- If no changes are detected, exit without doing anything
+
+## Change Analysis & Commit
+
+1. **Review all changes** using `git status` and `git diff --staged` (or `git diff` if nothing staged)
+2. **Stage changes** if not already staged using `git add .` or selective staging
+3. **Analyze the changes** to understand:
+   - Type of changes (new feature, bug fix, refactor, etc.)
+   - Scope of changes (which files/components affected)
+   - Impact and purpose of the changes
+
+## Commit Message Creation
+
+Create a commit message following this format:
+
+```
+<gitmoji> <type>: <concise description>
+
+<optional detailed explanation if needed>
+```
+
+### Gitmoji Selection Guide
+
+Choose the most appropriate gitmoji from <https://gitmoji.dev/> based on change type:
+
+**Common Patterns:**
+
+- ✨ `:sparkles:` - New features
+- 🐛 `:bug:` - Bug fixes
+- 🎨 `:art:` - Code structure/format improvements
+- ⚡️ `:zap:` - Performance improvements
+- 📝 `:memo:` - Documentation updates
+- 🔧 `:wrench:` - Configuration changes
+- ♻️ `:recycle:` - Code refactoring
+- 🚨 `:rotating_light:` - Fix linter warnings
+- ✅ `:white_check_mark:` - Add/update tests
+- 🔒️ `:lock:` - Security fixes
+- ⬆️ `:arrow_up:` - Upgrade dependencies
+- 🚚 `:truck:` - Move/rename files
+- 🗑️ `:wastebasket:` - Remove deprecated code
+
+### Message Guidelines
+
+- **Title**: Keep under 50 characters, use imperative mood
+- **Body**: Explain "what" and "why", not "how"
+- **Language**: Write in English
+- **Tone**: Professional and concise
+
+## Final Steps
+
+- Execute the commit with the generated message
+- Display a summary of what was committed
+- Suggest next steps (push to remote, create PR, etc.)

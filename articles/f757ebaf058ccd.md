@@ -630,6 +630,22 @@ func TestToPaymentStatus_Unknown(t *testing.T) {
         t.Fatal("expected error for unknown state")
     }
 }
+
+func TestToChargeRequest(t *testing.T) {
+    tr := &translator{}
+
+    req := tr.toChargeRequest("order_789", domain.Money{Amount: 2500, Currency: "JPY"})
+
+    if req.MerchantRef != "order_789" {
+        t.Errorf("MerchantRef = %s, want order_789", req.MerchantRef)
+    }
+    if req.AmountCents != 2500 {
+        t.Errorf("AmountCents = %d, want 2500", req.AmountCents)
+    }
+    if req.CurrencyCode != "JPY" {
+        t.Errorf("CurrencyCode = %s, want JPY", req.CurrencyCode)
+    }
+}
 ```
 
 Translatorをテストする際のポイントは以下の通りです。
@@ -637,6 +653,7 @@ Translatorをテストする際のポイントは以下の通りです。
 - 外部APIの各状態がドメインの正しい状態にマッピングされることを検証します
 - 決済完了時のみ`PaidAt`が設定されることを確認します
 - 未知の状態でエラーが返ることを確認し、外部API変更時の検出を保証します
+- リクエスト変換（`toChargeRequest`）のフィールドマッピングが正しいことを確認します
 
 ---
 

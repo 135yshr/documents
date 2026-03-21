@@ -22,7 +22,7 @@ published: true
 
 ## 腐敗防止層とは
 
-腐敗防止層は、Eric Evansが『Domain-Driven Design』で定義したパターンです。外部システムのモデルが自分のドメインモデルを「腐敗」させることを防ぐ翻訳層として機能します。
+腐敗防止層は、Eric Evansが『Domain-Driven Design』で定義したパターンです。
 
 > Create an isolating layer to provide clients with functionality in terms of their own domain model. The layer talks to the other system through its existing interface, requiring little or no modification to the other system.
 >
@@ -58,11 +58,11 @@ graph LR
 
 | 要素 | 責務 |
 | --- | --- |
+| Translator | 外部のデータ構造をドメインモデルに変換します（またはその逆） |
 | Facade | 外部システムの複雑なインターフェースを簡素化します（通信プロトコルの詳細を隠蔽します） |
 | Adapter | ドメイン層のリクエストを受け取り、FacadeとTranslatorを使って外部システムと橋渡しします |
-| Translator | 外部のデータ構造をドメインモデルに変換します（またはその逆） |
 
-FacadeとAdapterはGoFの同名パターン（Gamma et al. 1995）に由来します。Facadeが外部システムのインターフェースを簡素化し、AdapterがそのFacadeとTranslatorを調整してドメイン層に適合させる、という役割分担です。
+FacadeとAdapterはGoFの同名パターン（Gamma et al. 1995）に由来します。
 
 ---
 
@@ -351,11 +351,7 @@ func (g *PaymentGateway) Charge(ctx context.Context, orderID string, amount doma
 }
 ```
 
-3要素の役割分担が明確になりました。
-
-- **Facade**（`paymentAPIFacade`）: HTTP通信の詳細（ヘッダー設定、ステータスコード判定、JSONデコード等）を担当します
-- **Adapter**（`PaymentGateway`）: ドメイン層のリクエストを受け取り、TranslatorとFacadeを調整します
-- **Translator**（`translator`）: ドメインモデルと外部型の相互変換を担当します
+Adapterの`Charge`メソッドは、変換（Translator）→ 通信（Facade）→ 変換（Translator）という3ステップで処理を組み立てています。Adapter自体にはビジネスロジックや通信コードがなく、調整役に徹している点がポイントです。
 
 ### ユースケースからの利用
 
@@ -668,7 +664,7 @@ Translatorをテストする際のポイントは以下の通りです。
 | Goでの実装       | 利用側でインターフェースを定義し、Facade + Adapter + Translatorで実装します |
 | プロトコル非依存 | REST / gRPC等、プロトコルが変わってもACLの構造は同じです                    |
 
-ACLは、外部システムとの境界を明確にし、ドメインモデルの純粋性を守るための重要なパターンです。ユースケース層がインターフェースを定義し、ACLがそれを実装する構造（依存性の逆転）により、ユースケース層はACLの実装詳細を一切知らずに済みます。Goのimplicit interfaceはこの設計を自然に実現する手段です。外部APIの仕様変更があっても、Translator内の変換ロジックを修正するだけでドメイン層への影響を防げます。
+ACLは、外部システムとの境界を明確にし、ドメインモデルの純粋性を守るための重要なパターンです。ユースケース層がインターフェースを定義し、ACLがそれを実装する構造（依存性の逆転）により、ユースケース層はACLの実装詳細を一切知らずに済みます。外部APIの仕様変更があっても、Translator内の変換ロジックを修正するだけでドメイン層への影響を防げます。
 
 ---
 

@@ -38,7 +38,7 @@ published: false
 
 ### ACLの構造
 
-ACLは概念的に3つの要素で構成されます。
+ACLは主に2つの要素で構成されます。
 
 ```mermaid
 graph LR
@@ -80,17 +80,18 @@ type PaymentStatus string
 const (
     PaymentStatusPending   PaymentStatus = "pending"
     PaymentStatusCompleted PaymentStatus = "completed"
+    PaymentStatusCancelled PaymentStatus = "cancelled"
     PaymentStatusFailed    PaymentStatus = "failed"
     PaymentStatusRefunded  PaymentStatus = "refunded"
 )
 
 // Payment はドメインの決済モデルです。
 type Payment struct {
-    ID        string
-    OrderID   string
-    Amount    Money
-    Status    PaymentStatus
-    PaidAt    time.Time
+    ID            string
+    OrderID       string
+    Amount        Money
+    Status        PaymentStatus
+    PaidAt        *time.Time
     FailureReason string
 }
 
@@ -109,6 +110,14 @@ type Money struct {
 // infra/payment/external/types.go
 package external
 
+// ChargeRequest は外部決済APIへのリクエストです。
+// このファイルはACL内部でのみ使用します。
+type ChargeRequest struct {
+    MerchantRef  string `json:"merchant_ref"`
+    AmountCents  int64  `json:"amount_cents"`
+    CurrencyCode string `json:"currency_code"`
+}
+
 // ChargeResponse は外部決済APIのレスポンスです。
 // このファイルはACL内部でのみ使用します。
 type ChargeResponse struct {
@@ -117,7 +126,7 @@ type ChargeResponse struct {
     AmountCents  int64  `json:"amount_cents"`
     CurrencyCode string `json:"currency_code"`
     State        string `json:"state"`       // "authorized", "captured", "voided", "refunded"
-    ProcessedAt  string `json:"processed_at"` // ISO 8601
+    ProcessedAt  string `json:"processed_at"` // RFC3339（例: "2024-01-15T10:30:00Z"）
     ErrorCode    string `json:"error_code"`
     ErrorMessage string `json:"error_message"`
 }
@@ -150,7 +159,7 @@ func (t *translator) toPayment(resp *external.ChargeResponse) (*domain.Payment, 
         return nil, fmt.Errorf("決済状態の変換に失敗しました: %w", err)
     }
 
-    paidAt, err := time.Parse(time.RFC3339, resp.ProcessedAt)
+    paidAt, err := t.toPaidAt(status, resp.ProcessedAt)
     if err != nil {
         return nil, fmt.Errorf("日時の解析に失敗しました: %w", err)
     }
@@ -168,6 +177,20 @@ func (t *translator) toPayment(resp *external.ChargeResponse) (*domain.Payment, 
     }, nil
 }
 
+// toPaidAt は決済完了時のみ PaidAt を設定します。
+// pending（オーソリ済み）や cancelled（ボイド）の段階ではまだ支払いが完了していないため nil を返します。
+func (t *translator) toPaidAt(status domain.PaymentStatus, processedAt string) (*time.Time, error) {
+    if status != domain.PaymentStatusCompleted && status != domain.PaymentStatusRefunded {
+        return nil, nil
+    }
+
+    parsed, err := time.Parse(time.RFC3339, processedAt)
+    if err != nil {
+        return nil, err
+    }
+    return &parsed, nil
+}
+
 func (t *translator) toPaymentStatus(state string) (domain.PaymentStatus, error) {
     switch state {
     case "authorized":
@@ -175,7 +198,7 @@ func (t *translator) toPaymentStatus(state string) (domain.PaymentStatus, error)
     case "captured":
         return domain.PaymentStatusCompleted, nil
     case "voided":
-        return domain.PaymentStatusFailed, nil
+        return domain.PaymentStatusCancelled, nil
     case "refunded":
         return domain.PaymentStatusRefunded, nil
     default:
@@ -183,19 +206,20 @@ func (t *translator) toPaymentStatus(state string) (domain.PaymentStatus, error)
     }
 }
 
-func (t *translator) toChargeRequest(orderID string, amount domain.Money) map[string]any {
-    return map[string]any{
-        "merchant_ref":  orderID,
-        "amount_cents":  amount.Amount,
-        "currency_code": amount.Currency,
+func (t *translator) toChargeRequest(orderID string, amount domain.Money) *external.ChargeRequest {
+    return &external.ChargeRequest{
+        MerchantRef:  orderID,
+        AmountCents:  amount.Amount,
+        CurrencyCode: amount.Currency,
     }
 }
 ```
 
 Translatorのポイントは以下の通りです。
 
-- 外部APIの語彙（`authorized`、`captured`等）をドメインの語彙（`completed`等）に翻訳します
+- 外部APIの語彙（`authorized`、`captured`、`voided`等）をドメインの語彙（`pending`、`completed`、`cancelled`等）に翻訳します
 - 日時フォーマットの変換など、技術的な差異もここで吸収します
+- 決済状態に応じて`PaidAt`の設定を制御します。まだ支払いが完了していない状態（`pending`や`cancelled`）では`nil`を返します
 - 未知の値に対してエラーを返すことで、外部API変更時に問題を早期検出します
 
 ### Adapter の実装
@@ -256,7 +280,7 @@ func (g *PaymentGateway) Charge(ctx context.Context, orderID string, amount doma
     }
     defer resp.Body.Close()
 
-    if resp.StatusCode != http.StatusOK {
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
         return nil, fmt.Errorf("決済APIがエラーを返しました: status=%d", resp.StatusCode)
     }
 
@@ -299,6 +323,13 @@ type ProcessPaymentUseCase struct {
     orderRepo orderReader
 }
 
+func NewProcessPaymentUseCase(gateway paymentGateway, orderRepo orderReader) *ProcessPaymentUseCase {
+    return &ProcessPaymentUseCase{
+        gateway:   gateway,
+        orderRepo: orderRepo,
+    }
+}
+
 func (uc *ProcessPaymentUseCase) Execute(ctx context.Context, orderID string) (*domain.Payment, error) {
     order, err := uc.orderRepo.FindByID(ctx, orderID)
     if err != nil {
@@ -329,30 +360,37 @@ ACLのパターンはHTTP/RESTに限りません。gRPCやGraphQLでも同じ考
 package shipping
 
 import (
+    "fmt"
+
     "myapp/domain"
     shippingpb "myapp/infra/shipping/gen/proto"
 )
 
 type translator struct{}
 
-func (t *translator) toShipment(resp *shippingpb.TrackingResponse) *domain.Shipment {
+func (t *translator) toShipment(resp *shippingpb.TrackingResponse) (*domain.Shipment, error) {
+    status, err := t.toShipmentStatus(resp.GetStatus())
+    if err != nil {
+        return nil, fmt.Errorf("配送状態の変換に失敗しました: %w", err)
+    }
+
     return &domain.Shipment{
         TrackingID: resp.GetTrackingId(),
-        Status:     t.toShipmentStatus(resp.GetStatus()),
+        Status:     status,
         Location:   resp.GetCurrentLocation(),
-    }
+    }, nil
 }
 
-func (t *translator) toShipmentStatus(status shippingpb.ShippingStatus) domain.ShipmentStatus {
+func (t *translator) toShipmentStatus(status shippingpb.ShippingStatus) (domain.ShipmentStatus, error) {
     switch status {
     case shippingpb.ShippingStatus_SHIPPED:
-        return domain.ShipmentStatusInTransit
+        return domain.ShipmentStatusInTransit, nil
     case shippingpb.ShippingStatus_DELIVERED:
-        return domain.ShipmentStatusDelivered
+        return domain.ShipmentStatusDelivered, nil
     case shippingpb.ShippingStatus_RETURNED:
-        return domain.ShipmentStatusReturned
+        return domain.ShipmentStatusReturned, nil
     default:
-        return domain.ShipmentStatusUnknown
+        return "", fmt.Errorf("未知の配送状態です: %v", status)
     }
 }
 ```
@@ -390,7 +428,7 @@ func (s *ShippingTracker) Track(ctx context.Context, trackingID string) (*domain
         return nil, fmt.Errorf("配送追跡の取得に失敗しました: %w", err)
     }
 
-    return s.translator.toShipment(resp), nil
+    return s.translator.toShipment(resp)
 }
 ```
 
@@ -411,13 +449,13 @@ func (s *ShippingTracker) Track(ctx context.Context, trackingID string) (*domain
 
 ACLはすべての外部連携に必要なわけではありません。以下の基準で導入を判断します。
 
-| 条件                                             | ACLの要否                                |
-| ------------------------------------------------ | ---------------------------------------- |
-| 外部APIのモデルが自分のドメインと大きく異なる    | 必要です                                 |
-| 外部APIの仕様変更頻度が高い                      | 必要です                                 |
-| レガシーシステムとの連携                         | 必要です                                 |
-| チーム内の別サービス（共通のドメイン言語がある） | 不要な場合が多いです                     |
-| 標準的なライブラリ（DB、キャッシュ等）           | 不要です（Repositoryパターンで十分です） |
+| 条件                                             | ACLの要否                            |
+| ------------------------------------------------ | ------------------------------------ |
+| 外部APIのモデルが自分のドメインと大きく異なる    | 必要です                             |
+| 外部APIの仕様変更頻度が高い                      | 必要です                             |
+| レガシーシステムとの連携                         | 必要です                             |
+| チーム内の別サービス（共通のドメイン言語がある） | 不要な場合が多いです                 |
+| 標準的なライブラリ（DB、キャッシュ等）           | 不要です（モデルの乖離が小さいため） |
 
 ACLを過剰に導入すると、翻訳層のメンテナンスコストが増えます。外部のモデルとドメインモデルが近い場合は、シンプルなAdapterで十分です。
 

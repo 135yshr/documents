@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "4a5d995f92f6",
+  "strategy": "manual-commit",
+  "branch": "chore/upgrade-zenn-cli",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "package-lock.json",
+    "package.json"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4a/5d995f92f6/0/metadata.json",
+      "transcript": "/4a/5d995f92f6/0/full.jsonl",
+      "content_hash": "/4a/5d995f92f6/0/content_hash.txt",
+      "prompt": "/4a/5d995f92f6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 49492,
+    "cache_read_tokens": 287237,
+    "output_tokens": 1503,
+    "api_call_count": 7
+  }
+}

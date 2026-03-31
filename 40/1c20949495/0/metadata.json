@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "401c20949495",
+  "session_id": "8db17ada-f91c-4a34-bdf8-55c428fe7b39",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-31T04:38:15.852778Z",
+  "branch": "refine/event-sourcing-article",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "5d60c08c688b",
+  "token_usage": {
+    "input_tokens": 286,
+    "cache_creation_tokens": 613559,
+    "cache_read_tokens": 42817721,
+    "output_tokens": 84696,
+    "api_call_count": 248
+  },
+  "session_metrics": {
+    "turn_count": 19
+  }
+}

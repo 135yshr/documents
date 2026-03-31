@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "8a890371654d",
+  "strategy": "manual-commit",
+  "branch": "refine/event-sourcing-article",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/5ffc0f6a7251e4.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/8a/890371654d/0/metadata.json",
+      "transcript": "/8a/890371654d/0/full.jsonl",
+      "content_hash": "/8a/890371654d/0/content_hash.txt",
+      "prompt": "/8a/890371654d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 305,
+    "cache_creation_tokens": 619268,
+    "cache_read_tokens": 46758163,
+    "output_tokens": 87526,
+    "api_call_count": 262
+  }
+}

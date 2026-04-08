@@ -100,7 +100,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 // usecase/create_task_interactor.go
 
 type taskRepository interface {
-    FindByTitle(ctx context.Context, projectID, title string) (*model.Task, error)
+    ExistsByTitle(ctx context.Context, projectID, title string) (bool, error)
     Save(ctx context.Context, task *model.Task) error
 }
 
@@ -126,16 +126,16 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
     }
 
     // ユースケース固有のバリデーション：同一プロジェクト内のタイトル重複チェック
-    existing, err := i.taskRepo.FindByTitle(ctx, input.ProjectID, input.Title)
+    exists, err := i.taskRepo.ExistsByTitle(ctx, input.ProjectID, input.Title)
     if err != nil {
         return nil, fmt.Errorf("failed to check duplicate: %w", err)
     }
-    if existing != nil {
+    if exists {
         return nil, ErrTaskTitleDuplicate
     }
 
     // ドメインモデルの生成（ドメイン層のバリデーションが実行される）
-    task, err := model.NewTask(input.Title, input.Description, input.Priority, input.ProjectID)
+    task, err := model.NewTask(input.Title, input.Description, input.Priority, input.ProjectID, time.Now())
     if err != nil {
         return nil, fmt.Errorf("failed to create task: %w", err)
     }
@@ -160,13 +160,15 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 - 現在のユーザーに対する権限チェック
 - 複数集約にまたがる整合性チェック
 
-**重要なのは、これらのチェックがドメインモデルの外に置かれる理由です。** 存在確認や重複チェックはリポジトリへの問い合わせが必要であり、ドメインモデルが外部依存を持つべきではないためです。
+**重要なのは、これらのチェックがドメインモデルの外に置かれる理由です。** 存在確認や重複チェックはリポジトリへの問い合わせが必要であり、エンティティや値オブジェクトが外部依存を持つべきではないためです。
+
+なお、「同一プロジェクト内のタイトル一意性」のようなルールはドメインサービスとして表現する選択肢もあります。ドメインサービスであればリポジトリインターフェースを受け取れるため、技術的にはドメイン層に置くことも可能です。本記事ではユースケース層に配置していますが、これはこのルールが**特定のユースケース（タスク作成）でのみ検証される**ためです。タスク名の変更時にも同じチェックが必要になった場合は、ドメインサービスへの移動を検討すべきです。
 
 ---
 
 ## ドメイン層のバリデーション：不変条件の保護
 
-ドメイン層のバリデーションは、**モデルの不変条件（invariants）を保護する**ために存在します。Eric Evansは『Domain-Driven Design』の中で、集約が常にトランザクション整合性を保つべきだと述べています。
+ドメイン層のバリデーションは、**モデルの不変条件（invariants）を保護する**ために存在します。Vaughn Vernonは『Implementing Domain-Driven Design』の中で、集約が常にトランザクション整合性を保つべきだと述べています。
 
 ### 値オブジェクトによるバリデーション
 
@@ -214,6 +216,21 @@ func NewTaskTitle(s string) (TaskTitle, error) {
 }
 ```
 
+```go
+// domain/model/task_description.go
+
+type TaskDescription string
+
+func NewTaskDescription(s string) (TaskDescription, error) {
+    if utf8.RuneCountInString(s) > 5000 {
+        return "", errors.New("task description must be 5000 characters or less")
+    }
+    return TaskDescription(s), nil
+}
+```
+
+`TaskTitle`と同様に、`TaskDescription`も値オブジェクトとして定義します。プレゼンテーション層の`max=5000`とドメイン層の上限値が重複しているように見えますが、役割は異なります。プレゼンテーション層は早期フィードバック用であり、ドメイン層は**どの経路からアクセスされても不変条件が破られないこと**を保証します。
+
 ### エンティティの不変条件
 
 エンティティのコンストラクタは、値オブジェクトを組み合わせて不変条件を保護します。
@@ -224,17 +241,22 @@ func NewTaskTitle(s string) (TaskTitle, error) {
 type Task struct {
     id          TaskID
     title       TaskTitle
-    description string
+    description TaskDescription
     priority    Priority
     status      TaskStatus
     projectID   ProjectID
     createdAt   time.Time
 }
 
-func NewTask(title, description, priority, projectID string) (*Task, error) {
+func NewTask(title, description, priority, projectID string, now time.Time) (*Task, error) {
     t, err := NewTaskTitle(title)
     if err != nil {
         return nil, fmt.Errorf("invalid title: %w", err)
+    }
+
+    d, err := NewTaskDescription(description)
+    if err != nil {
+        return nil, fmt.Errorf("invalid description: %w", err)
     }
 
     p, err := NewPriority(priority)
@@ -250,14 +272,16 @@ func NewTask(title, description, priority, projectID string) (*Task, error) {
     return &Task{
         id:          NewTaskID(),
         title:       t,
-        description: description,
+        description: d,
         priority:    p,
         status:      TaskStatusOpen,
         projectID:   pid,
-        createdAt:   time.Now(),
+        createdAt:   now,
     }, nil
 }
 ```
+
+`time.Now()`をコンストラクタ内で直接呼び出すと、テスト時に時刻を制御できません。`now time.Time`を引数として外部から注入することで、テストでは固定時刻を渡し、本番コードでは`time.Now()`を渡す設計にしています。
 
 ### 状態遷移のバリデーション
 
@@ -327,11 +351,13 @@ flowchart LR
 
 | 脅威 | 対策層 | 具体的な対策 |
 | --- | --- | --- |
-| SQLインジェクション | インフラ（＋プレゼンテーション） | プリペアドステートメント（主対策）＋Content-Type検証（補助） |
-| XSS | プレゼンテーション | 出力エスケープ＋CSPヘッダ |
+| SQLインジェクション | インフラ | プリペアドステートメント |
+| XSS | インフラ（＋プレゼンテーション） | 出力時のエスケープ（主対策）＋CSPヘッダ（補助） |
 | 不正な状態遷移 | ドメイン | 状態遷移マップによる制御 |
 | 権限昇格 | アプリケーション | ユースケースでの権限チェック |
 | 大量データ送信 | プレゼンテーション | リクエストサイズ制限＋レートリミット |
+
+SQLインジェクションの対策はプリペアドステートメント（パラメータ化クエリ）に尽きます。入力バリデーションはSQLインジェクション対策にはなりません。XSSの対策も入力時ではなく**出力時**のエスケープが主対策です。テンプレートエンジンの自動エスケープやCSPヘッダはインフラ層・ミドルウェアの責務であり、入力バリデーションの文脈とは区別して理解する必要があります。
 
 Go のミドルウェアでセキュリティ関連のバリデーションを共通化する例です。
 
@@ -370,29 +396,43 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。
 
-```go
-// domain/model/validation_error.go
+ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のようなHTTPリクエストに紐づく概念はプレゼンテーション層の関心事であり、ドメイン層に持ち込むべきではありません。
 
-type ValidationError struct {
-    Field   string
+```go
+// domain/model/rule_violation.go
+
+// RuleViolation はドメインルールの違反を表現します。
+// どのルールに違反したかを示し、プレゼンテーション層の概念（フィールド名など）には依存しません。
+type RuleViolation struct {
+    Rule    string
     Message string
 }
 
-type ValidationErrors []ValidationError
+type RuleViolations []RuleViolation
 
-func (ve ValidationErrors) Error() string {
+func (rv RuleViolations) Error() string {
     var msgs []string
-    for _, e := range ve {
-        msgs = append(msgs, fmt.Sprintf("%s: %s", e.Field, e.Message))
+    for _, v := range rv {
+        msgs = append(msgs, fmt.Sprintf("%s: %s", v.Rule, v.Message))
     }
     return strings.Join(msgs, "; ")
 }
 ```
 
+プレゼンテーション層では、ドメイン層の`RuleViolation`をAPIレスポンス用の構造に変換します。「どのルールに違反したか」から「どのフィールドに問題があるか」へのマッピングはプレゼンテーション層の責務です。
+
 ```go
 // interface/rest/handler/error_response.go
 
-func respondValidationErrors(w http.ResponseWriter, errs model.ValidationErrors) {
+// ドメインルール名からAPIフィールド名へのマッピング
+var ruleToField = map[string]string{
+    "TaskTitleRequired": "title",
+    "TaskTitleLength":   "title",
+    "PriorityInvalid":   "priority",
+    "DescriptionLength": "description",
+}
+
+func respondRuleViolations(w http.ResponseWriter, violations model.RuleViolations) {
     type fieldError struct {
         Field   string `json:"field"`
         Message string `json:"message"`
@@ -402,10 +442,14 @@ func respondValidationErrors(w http.ResponseWriter, errs model.ValidationErrors)
         Errors []fieldError `json:"errors"`
     }{}
 
-    for _, e := range errs {
+    for _, v := range violations {
+        field := ruleToField[v.Rule]
+        if field == "" {
+            field = v.Rule
+        }
         resp.Errors = append(resp.Errors, fieldError{
-            Field:   e.Field,
-            Message: e.Message,
+            Field:   field,
+            Message: v.Message,
         })
     }
 

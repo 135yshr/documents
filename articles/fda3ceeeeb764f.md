@@ -10,7 +10,7 @@ published: false
 
 :::message
 
-本記事はDDD（ドメイン駆動設計）における入力バリデーションの設計指針をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+本記事はDDD（ドメイン駆動設計）における入力バリデーションの設計指針をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に書名・章番号またはURLで記載しています。
 
 :::
 
@@ -78,8 +78,24 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
     }
 
     // アプリケーション層に委譲
-    output, err := h.taskCreator.Create(r.Context(), toUseCaseInput(req))
-    // ...
+    projectID := chi.URLParam(r, "projectID")
+    output, err := h.taskCreator.Create(r.Context(), &usecase.CreateTaskInput{
+        Title:       req.Title,
+        Description: req.Description,
+        Priority:    req.Priority,
+        ProjectID:   projectID,
+        AssigneeID:  req.AssigneeID,
+    })
+    if err != nil {
+        var violations model.RuleViolations
+        if errors.As(err, &violations) {
+            respondRuleViolations(w, violations)
+            return
+        }
+        respondError(w, http.StatusInternalServerError, "internal server error")
+        return
+    }
+    respondJSON(w, http.StatusCreated, output)
 }
 ```
 
@@ -102,7 +118,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 // usecase/create_task_interactor.go
 
 type taskRepository interface {
-    ExistsByTitle(ctx context.Context, projectID, title string) (bool, error)
+    ExistsByTitle(ctx context.Context, projectID model.ProjectID, title model.TaskTitle) (bool, error)
     Save(ctx context.Context, task *model.Task) error
 }
 
@@ -113,6 +129,7 @@ type memberRepository interface {
 type CreateTaskInteractor struct {
     taskRepo   taskRepository
     memberRepo memberRepository
+    now        func() time.Time
 }
 
 func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInput) (*CreateTaskOutput, error) {
@@ -127,25 +144,22 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
         }
     }
 
-    // ユースケース固有のバリデーション：同一プロジェクト内のタイトル重複チェック
-    exists, err := i.taskRepo.ExistsByTitle(ctx, input.ProjectID, input.Title)
+    // ドメインモデルの生成（ドメイン層のバリデーションが実行される）
+    task, err := model.NewTask(input.Title, input.Description, input.Priority, input.ProjectID, i.now())
     if err != nil {
-        return nil, fmt.Errorf("failed to check duplicate: %w", err)
+        return nil, fmt.Errorf("failed to create task: %w", err)
+    }
+
+    // ユースケース固有のバリデーション：同一プロジェクト内のタイトル重複チェック
+    exists, eerr := i.taskRepo.ExistsByTitle(ctx, task.ProjectID(), task.Title())
+    if eerr != nil {
+        return nil, fmt.Errorf("failed to check duplicate: %w", eerr)
     }
     if exists {
         return nil, ErrTaskTitleDuplicate
     }
 
-    // ドメインモデルの生成（ドメイン層のバリデーションが実行される）
-    task, err := model.NewTask(input.Title, input.Description, input.Priority, input.ProjectID, time.Now())
-    if err != nil {
-        return nil, fmt.Errorf("failed to create task: %w", err)
-    }
-
-    // ExistsByTitleは早期フィードバック用であり、並行リクエストの最終防衛線はDB側の一意制約です。
-    // DB側には以下のような一意制約を定義しておきます。
-    //   ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
-    // Save時にこの一意制約に違反した場合、リポジトリ実装がrepository.ErrDuplicateTitleを返します。
+    // 並行リクエストの最終防衛線はDB側の一意制約
     if err := i.taskRepo.Save(ctx, task); err != nil {
         if errors.Is(err, repository.ErrDuplicateTitle) {
             return nil, ErrTaskTitleDuplicate
@@ -157,7 +171,15 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 }
 ```
 
-`repository.ErrDuplicateTitle`はリポジトリ実装側で定義するセンチネルエラーです。DBドライバ固有のエラーをドメインが理解できるエラーに変換する責務はインフラ層にあります。これはAlistair Cockburnの[Hexagonal Architecture（Ports and Adapters）](https://alistair.cockburn.us/hexagonal-architecture/)の原則に基づいています。外部技術の詳細をアダプター（インフラ層）が吸収し、ポート（リポジトリインターフェース）を通じてドメインが理解できる形で公開します。
+`ExistsByTitle`は早期フィードバック用のチェックです。並行リクエストでは競合の可能性があるため、最終的な防衛線はDB側の一意制約です。
+
+```sql
+ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
+```
+
+Save時にこの制約へ違反した場合、リポジトリ実装が`repository.ErrDuplicateTitle`を返します。このセンチネルエラーはリポジトリ実装側で定義します。
+
+Cockburnの[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これはdriven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースがdriven Port、DB実装がdriven Adapterにあたります。一方、REST handlerはdriving side（外部がアプリケーションを駆動する側）のAdapterです。driven AdapterがDBエラーを吸収し、driven Portを通じてドメイン側が理解できるエラーを返します。
 
 ```go
 // infrastructure/repository/error.go
@@ -206,7 +228,7 @@ func NewPriority(s string) (Priority, error) {
     case "high":
         return PriorityHigh, nil
     default:
-        return 0, fmt.Errorf("invalid priority: %s", s)
+        return 0, &RuleViolation{Rule: "PriorityInvalid", Message: fmt.Sprintf("invalid priority: %s", s)}
     }
 }
 ```
@@ -241,7 +263,7 @@ func NewTaskDescription(s string) (TaskDescription, error) {
 }
 ```
 
-`TaskTitle`と同様に、`TaskDescription`も値オブジェクトとして定義します。プレゼンテーション層の`max=5000`とドメイン層の上限値が重複しているように見えますが、役割は異なります。プレゼンテーション層は早期フィードバック用であり、ドメイン層は**どの経路からアクセスされても不変条件が破られないこと**を保証します。
+`TaskTitle`と同様に、`TaskDescription`も値オブジェクトとして定義します。プレゼンテーション層の`max=5000`とドメイン層の上限値が重複しているように見えますが、役割は異なります。プレゼンテーション層は早期フィードバック用であり、ドメイン層はアクセス経路に依存しない最終防衛線です。
 
 ### エンティティの不変条件
 
@@ -265,24 +287,30 @@ type Task struct {
 }
 
 func NewTask(title, description, priority, projectID string, now time.Time) (*Task, error) {
+    var violations RuleViolations
+
     t, err := NewTaskTitle(title)
     if err != nil {
-        return nil, fmt.Errorf("invalid title: %w", err)
+        violations = append(violations, *err.(*RuleViolation))
     }
 
-    d, err := NewTaskDescription(description)
-    if err != nil {
-        return nil, fmt.Errorf("invalid description: %w", err)
+    d, derr := NewTaskDescription(description)
+    if derr != nil {
+        violations = append(violations, *derr.(*RuleViolation))
     }
 
-    p, err := NewPriority(priority)
-    if err != nil {
-        return nil, fmt.Errorf("invalid priority: %w", err)
+    p, perr := NewPriority(priority)
+    if perr != nil {
+        violations = append(violations, *perr.(*RuleViolation))
     }
 
-    pid, err := NewProjectID(projectID)
-    if err != nil {
-        return nil, fmt.Errorf("invalid project id: %w", err)
+    pid, piderr := NewProjectID(projectID)
+    if piderr != nil {
+        violations = append(violations, *piderr.(*RuleViolation))
+    }
+
+    if len(violations) > 0 {
+        return nil, violations
     }
 
     return &Task{
@@ -297,7 +325,7 @@ func NewTask(title, description, priority, projectID string, now time.Time) (*Ta
 }
 ```
 
-`time.Now()`をコンストラクタ内で直接呼び出すと、テスト時に時刻を制御できません。`now time.Time`を引数として外部から注入することで、テストでは固定時刻を渡し、本番コードでは`time.Now()`を渡す設計にしています。
+`time.Now()`をコンストラクタやユースケース内で直接呼び出すと、テスト時に時刻を制御できません。ドメインモデルは`now time.Time`を引数で受け取り、ユースケース層は`func() time.Time`型のクロック関数をフィールドで保持します。本番コードでは`time.Now`を注入し、テストでは固定時刻を返す関数を注入します。
 
 ### 状態遷移のバリデーション
 
@@ -363,7 +391,7 @@ flowchart LR
 
 ### セキュリティ観点でのバリデーション
 
-セキュリティの観点では、OWASP（Open Worldwide Application Security Project）のガイドラインが参考になります。
+セキュリティの観点では、OWASPのガイドラインおよび一般的なセキュリティプラクティスをもとに、各層での対策を整理します。
 
 | 脅威 | 対策層 | 具体的な対策 |
 | --- | --- | --- |
@@ -371,6 +399,7 @@ flowchart LR
 | XSS | プレゼンテーション（＋インフラ） | 出力時のエスケープ（主対策）＋CSPヘッダ（補助） |
 | 不正な状態遷移 | ドメイン | 状態遷移マップによる制御 |
 | 権限昇格 | アプリケーション | ユースケースでの権限チェック |
+| CSRF | インフラ（＋プレゼンテーション） | CSRFトークン検証またはAPIトークン認証＋SameSite Cookie（[OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)） |
 | 大量データ送信 | プレゼンテーション | リクエストサイズ制限＋レートリミット |
 
 SQLインジェクションの主対策はプリペアドステートメント（パラメータ化クエリ）です。OWASPは入力バリデーションを補助的な防御（secondary defense）と位置づけていますが、主対策の代替にはなりません。XSSについても、OWASPの[XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html)は**出力時**のエスケープを主対策としています。出力エスケープはテンプレートレンダリング時の処理であり、Goの`html/template`パッケージのように**プレゼンテーション層**が担当します。CSPヘッダは補助的な多層防御としてインフラ層（ミドルウェア）が設定します。いずれも入力バリデーションの文脈とは区別して理解する必要があります。
@@ -393,6 +422,7 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
             // Content-Typeの検証
+            // DELETEにJSONボディを持たせるAPIではここに追加する
             if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
                 ct := r.Header.Get("Content-Type")
                 if !strings.HasPrefix(ct, "application/json") {
@@ -412,7 +442,7 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。
 
-ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のようなHTTPリクエストに紐づく概念はプレゼンテーション層の関心事です。Robert C. Martinの[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)は、外側の層が内側の層に依存し、その逆は許さないという依存性ルールを定めています。ドメイン層がプレゼンテーション層の概念に依存する設計は、このルールに反します。
+ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のようなHTTPリクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDDの文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martinの[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
 
 ```go
 // domain/model/rule_violation.go
@@ -430,7 +460,7 @@ func (rv *RuleViolation) Error() string {
 }
 
 // RuleViolations は複数のルール違反をまとめて返す場合に使います。
-// エンティティのコンストラクタで複数の値オブジェクト生成を試み、すべてのエラーを収集する用途を想定しています。
+// 上記の NewTask のように、すべての値オブジェクト生成を試みてからエラーをまとめて返す用途で使用します。
 type RuleViolations []RuleViolation
 
 func (rv RuleViolations) Error() string {
@@ -478,7 +508,9 @@ func respondRuleViolations(w http.ResponseWriter, violations model.RuleViolation
 
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusUnprocessableEntity)
-    json.NewEncoder(w).Encode(resp)
+    if err := json.NewEncoder(w).Encode(resp); err != nil {
+        log.Printf("failed to encode response: %v", err)
+    }
 }
 ```
 
@@ -494,9 +526,7 @@ DDDにおけるバリデーション設計のポイントを整理します。
 | アプリケーション層 | ユースケースの整合性 | リポジトリへの問い合わせで外部状態を検証する |
 | ドメイン層 | 不変条件 | 値オブジェクトとエンティティのコンストラクタで保護する |
 
-最も重要な原則は、**ドメインモデルが自分自身の不変条件を守る**ことです。Vladimir Khorikovはこれを[Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/)と呼んでいます。値オブジェクトのコンストラクタで不正な値の生成を防ぎ、エンティティのメソッドで不正な状態遷移を拒否することで、どの経路からアクセスされてもモデルは常に有効な状態を保ちます。
-
-プレゼンテーション層とアプリケーション層のバリデーションは、ドメイン層の保護を補強する「多層防御」の外側のレイヤーです。ユーザー体験やパフォーマンスの向上には必要ですが、最終的な防衛線はドメインモデル自身にあります。
+最も重要な原則は、Vladimir Khorikovが[Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/)と呼ぶ考え方です。ドメインモデルが自身の不変条件を守り、プレゼンテーション層とアプリケーション層がその外側で多層防御を構成します。
 
 ---
 
@@ -504,11 +534,13 @@ DDDにおけるバリデーション設計のポイントを整理します。
 
 | 内容 | 出典 |
 | --- | --- |
+| レイヤードアーキテクチャの依存方向 | Eric Evans, _Domain-Driven Design_（2003）Chapter 4: Isolating the Domain |
 | 値オブジェクトの不変性と自己検証 | Eric Evans, _Domain-Driven Design_（2003）Chapter 5: A Model Expressed in Software |
 | 集約の不変条件 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013）Chapter 10: Aggregates |
 | Always-Valid Domain Model | Vladimir Khorikov, [Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/) |
 | 入力バリデーションとセキュリティ | OWASP, [Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html) |
 | XSS対策の主対策と補助的防御 | OWASP, [XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html) |
+| CSRF対策 | OWASP, [CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) |
 | クリーンアーキテクチャの依存性ルール | Robert C. Martin, [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) |
 | Hexagonal Architecture（Ports and Adapters） | Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) |
 | Go のバリデーションライブラリ | go-playground/validator, [GitHub](https://github.com/go-playground/validator) |

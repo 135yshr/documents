@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "489d036d4abd",
+  "session_id": "d36f7307-da00-4655-8726-624cf113d12e",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-11T06:01:36.828672Z",
+  "branch": "refine/event-sourcing-article",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "articles/fda3ceeeeb764f.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "dbc9406f1080",
+  "checkpoint_transcript_start": 280,
+  "transcript_lines_at_start": 280,
+  "token_usage": {
+    "input_tokens": 63,
+    "cache_creation_tokens": 54033,
+    "cache_read_tokens": 8764465,
+    "output_tokens": 20310,
+    "api_call_count": 54
+  },
+  "session_metrics": {
+    "turn_count": 13
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-11T06:01:36.416932Z",
+    "agent_lines": 70,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 70,
+    "agent_percentage": 100
+  }
+}

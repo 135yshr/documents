@@ -18,7 +18,7 @@ published: false
 
 私がGoでDDDを実践する中で経験したのは、バリデーションの配置が曖昧なまま開発を進めた結果、**同じチェックがController・UseCase・ドメインモデルに重複して散在する**状態でした。修正漏れによるバグが発生し、「どの層のバリデーションが正なのか」が分からなくなりました。
 
-この記事では、バリデーションを**プレゼンテーション層・アプリケーション層・ドメイン層**の3層に分けて設計する方法と、各層が何を守るべきかを整理します。
+この記事では、バリデーションを**プレゼンテーション層（Handler層）・アプリケーション層（UseCase層）・ドメイン層**の3層に分けて設計する方法と、各層が何を守るべきかを整理します。本シリーズの他の記事では Handler層・UseCase層と呼んでいる層に対応します。
 
 ---
 
@@ -26,7 +26,7 @@ published: false
 
 バリデーションは、入力がシステムに到達してからドメインモデルに届くまでの間に、段階的にフィルタリングされるべきです。Vaughn Vernonは『Implementing Domain-Driven Design』（2013）Chapter 10で、集約が自身の不変条件を常に保護すべきだと述べています。
 
-以下の3層モデルは、Vernonの不変条件の保護という原則と、実際のGoプロジェクトでの私の経験をもとに整理した**本記事独自の分類**です。DDDの文献でこの3層が標準的に定義されているわけではありませんが、バリデーションの配置を議論する際の実用的なフレームワークとして使えます。
+バリデーションの層別配置はDDDコミュニティで広く議論されているテーマです。Vernon（IDDD, Chapter 5）は属性の自己検証・全体検証・遅延検証を区別しています。Khorikov（[Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/)）は入力バリデーションとドメイン不変条件を明確に分離しています。以下の3層モデルは、これらの先行議論と私のGoプロジェクトでの経験をもとに整理したものです。
 
 ```mermaid
 flowchart TD
@@ -119,7 +119,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 type taskRepository interface {
     ExistsByTitle(ctx context.Context, projectID model.ProjectID, title model.TaskTitle) (bool, error)
-    Save(ctx context.Context, task *model.Task) error
+    Save(ctx context.Context, task model.Task) error
 }
 
 type memberRepository interface {
@@ -161,7 +161,7 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 
     // 並行リクエストの最終防衛線はDB側の一意制約
     if err := i.taskRepo.Save(ctx, task); err != nil {
-        if errors.Is(err, repository.ErrDuplicateTitle) {
+        if errors.Is(err, model.ErrDuplicateTitle) {
             return nil, ErrTaskTitleDuplicate
         }
         return nil, fmt.Errorf("failed to save task: %w", err)
@@ -177,12 +177,12 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
 ```
 
-Save時にこの制約へ違反した場合、リポジトリ実装が`repository.ErrDuplicateTitle`を返します。このセンチネルエラーはリポジトリ実装側で定義します。
+Save時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義されたセンチネルエラー`model.ErrDuplicateTitle`を返します。本シリーズの[エラーハンドリング記事](https://zenn.dev/and_and/articles/56e161aff29ff9)で述べたとおり、Repository層はドメインのセンチネルエラーを返し、インフラ固有のエラーはアダプター内で変換します。
 
-Cockburnの[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これはdriven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースがdriven Port、DB実装がdriven Adapterにあたります。一方、REST handlerはdriving side（外部がアプリケーションを駆動する側）のAdapterです。driven AdapterがDBエラーを吸収し、driven Portを通じてドメイン側が理解できるエラーを返します。
+Cockburnの[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これはdriven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースがdriven Port、`infrastructure/postgres`のDB実装がdriven Adapterにあたります。一方、REST handlerはdriving side（外部がアプリケーションを駆動する側）のAdapterです。driven AdapterがDBエラーを吸収し、driven Portを通じてドメイン側が理解できるエラーを返します。
 
 ```go
-// infrastructure/repository/error.go
+// domain/model/errors.go
 
 var ErrDuplicateTitle = errors.New("task title already exists in this project")
 ```
@@ -208,6 +208,8 @@ var ErrDuplicateTitle = errors.New("task title already exists in this project")
 
 値オブジェクトのコンストラクタでバリデーションを行うことで、**不正な値がシステム内に存在できない**ことを保証します。Evans（DDD, Chapter 5）は値オブジェクトの不変性と自己完結的な検証について論じています。本記事の設計はその考え方に基づいています。
 
+本シリーズの[値オブジェクト記事](https://zenn.dev/and_and/articles/98473f8e119657)で述べたとおり、バリデーションが必要な値オブジェクトには Named Type（`type X string`）ではなく struct + New 関数パターンを使います。struct の非公開フィールドにより、コンストラクタを経由しない値の生成を防げます。
+
 ```go
 // domain/model/priority.go
 
@@ -228,7 +230,7 @@ func NewPriority(s string) (Priority, error) {
     case "high":
         return PriorityHigh, nil
     default:
-        return 0, &RuleViolation{Rule: "PriorityInvalid", Message: fmt.Sprintf("invalid priority: %s", s)}
+        return 0, &RuleViolation{Rule: "PriorityInvalid", Message: fmt.Sprintf("不正な優先度です: %s", s)}
     }
 }
 ```
@@ -236,31 +238,35 @@ func NewPriority(s string) (Priority, error) {
 ```go
 // domain/model/task_title.go
 
-type TaskTitle string
+type TaskTitle struct{ value string }
 
 func NewTaskTitle(s string) (TaskTitle, error) {
     s = strings.TrimSpace(s)
     if s == "" {
-        return "", &RuleViolation{Rule: "TaskTitleRequired", Message: "task title must not be empty"}
+        return TaskTitle{}, &RuleViolation{Rule: "TaskTitleRequired", Message: "タスクタイトルは必須です"}
     }
     if utf8.RuneCountInString(s) > 200 {
-        return "", &RuleViolation{Rule: "TaskTitleLength", Message: "task title must be 200 characters or less"}
+        return TaskTitle{}, &RuleViolation{Rule: "TaskTitleLength", Message: "タスクタイトルは200文字以内にしてください"}
     }
-    return TaskTitle(s), nil
+    return TaskTitle{value: s}, nil
 }
+
+func (t TaskTitle) String() string { return t.value }
 ```
 
 ```go
 // domain/model/task_description.go
 
-type TaskDescription string
+type TaskDescription struct{ value string }
 
 func NewTaskDescription(s string) (TaskDescription, error) {
     if utf8.RuneCountInString(s) > 5000 {
-        return "", &RuleViolation{Rule: "DescriptionLength", Message: "task description must be 5000 characters or less"}
+        return TaskDescription{}, &RuleViolation{Rule: "DescriptionLength", Message: "説明は5000文字以内にしてください"}
     }
-    return TaskDescription(s), nil
+    return TaskDescription{value: s}, nil
 }
+
+func (d TaskDescription) String() string { return d.value }
 ```
 
 `TaskTitle`と同様に、`TaskDescription`も値オブジェクトとして定義します。プレゼンテーション層の`max=5000`とドメイン層の上限値が重複しているように見えますが、役割は異なります。プレゼンテーション層は早期フィードバック用であり、ドメイン層はアクセス経路に依存しない最終防衛線です。
@@ -286,7 +292,7 @@ type Task struct {
     createdAt   time.Time
 }
 
-func NewTask(title, description, priority, projectID string, now time.Time) (*Task, error) {
+func NewTask(title, description, priority, projectID string, now time.Time) (Task, error) {
     var violations RuleViolations
 
     t, err := NewTaskTitle(title)
@@ -310,10 +316,10 @@ func NewTask(title, description, priority, projectID string, now time.Time) (*Ta
     }
 
     if len(violations) > 0 {
-        return nil, violations
+        return Task{}, violations
     }
 
-    return &Task{
+    return Task{
         id:          NewTaskID(),
         title:       t,
         description: d,
@@ -440,7 +446,7 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 ## バリデーションエラーの設計
 
-各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。
+各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。本シリーズの[エラーハンドリング記事](https://zenn.dev/and_and/articles/56e161aff29ff9)ではセンチネルエラーと`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本記事では`RuleViolation`型を導入します。
 
 ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のようなHTTPリクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDDの文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martinの[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
 
@@ -536,8 +542,11 @@ DDDにおけるバリデーション設計のポイントを整理します。
 | --- | --- |
 | レイヤードアーキテクチャの依存方向 | Eric Evans, _Domain-Driven Design_（2003）Chapter 4: Isolating the Domain |
 | 値オブジェクトの不変性と自己検証 | Eric Evans, _Domain-Driven Design_（2003）Chapter 5: A Model Expressed in Software |
+| エンティティの検証戦略（自己検証・全体検証・遅延検証） | Vaughn Vernon, _Implementing Domain-Driven Design_（2013）Chapter 5: Entities |
 | 集約の不変条件 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013）Chapter 10: Aggregates |
 | Always-Valid Domain Model | Vladimir Khorikov, [Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/) |
+| 入力バリデーションとドメイン不変条件の分離 | Vladimir Khorikov, [Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/) |
+| ドメインモデル層でのバリデーション設計 | Microsoft, [Domain model layer validations](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/domain-model-layer-validations) |
 | 入力バリデーションとセキュリティ | OWASP, [Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html) |
 | XSS対策の主対策と補助的防御 | OWASP, [XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html) |
 | CSRF対策 | OWASP, [CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) |

@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "783a8fe40c57",
+  "session_id": "5d70c437-3168-4c82-86d1-46b5790e02d3",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-16T04:15:38.756428Z",
+  "branch": "review/cqrs-authorization-article",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "articles/60d7d006c0f38f.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6[1m]",
+  "turn_id": "8f1c36339894",
+  "token_usage": {
+    "input_tokens": 142,
+    "cache_creation_tokens": 260208,
+    "cache_read_tokens": 7907738,
+    "output_tokens": 40500,
+    "api_call_count": 95
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-16T04:15:38.529049Z",
+    "agent_lines": 244,
+    "human_added": 0,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 245,
+    "agent_percentage": 99.59183673469387
+  }
+}

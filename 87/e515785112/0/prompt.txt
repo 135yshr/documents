@@ -1,0 +1,6 @@
+/code-review
+
+---
+
+https://github.com/135yshr/documents/pull/97 でレビューコメントがついています。
+内容を確認して修正してください

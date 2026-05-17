@@ -1,0 +1,6 @@
+pushします
+
+---
+
+https://github.com/135yshr/documents/pull/98 コードレビューでいくつか指摘がありました。
+内容を確認して修正してください

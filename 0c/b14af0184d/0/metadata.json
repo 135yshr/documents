@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "0cb14af0184d",
+  "session_id": "af0fa6f0-c694-4a2f-889f-dcc05e6017d9",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-04T09:04:59.384347Z",
+  "branch": "docs/cqrs-readmodel-review-fixes",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/60293061fe34dd.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "bb0e5ed11cc7",
+  "token_usage": {
+    "input_tokens": 45,
+    "cache_creation_tokens": 198491,
+    "cache_read_tokens": 2964540,
+    "output_tokens": 17669,
+    "api_call_count": 36
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-04T09:04:59.30246Z",
+    "agent_lines": 54,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 54,
+    "agent_percentage": 100
+  }
+}

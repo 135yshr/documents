@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "c5470de30f59",
+  "strategy": "manual-commit",
+  "branch": "docs/cqrs-readmodel-review-fixes",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/60293061fe34dd.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c5/470de30f59/0/metadata.json",
+      "transcript": "/c5/470de30f59/0/full.jsonl",
+      "content_hash": "/c5/470de30f59/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 7,
+    "cache_creation_tokens": 8345,
+    "cache_read_tokens": 309335,
+    "output_tokens": 910,
+    "api_call_count": 3
+  }
+}

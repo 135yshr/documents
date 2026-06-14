@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "d8f0abcffd50",
+  "strategy": "manual-commit",
+  "branch": "fix/depguard-archunit-references",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/7d2428cbcd258d.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d8/f0abcffd50/0/metadata.json",
+      "transcript": "/d8/f0abcffd50/0/full.jsonl",
+      "content_hash": "/d8/f0abcffd50/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 62029,
+    "cache_read_tokens": 231110,
+    "output_tokens": 2834,
+    "api_call_count": 5
+  }
+}

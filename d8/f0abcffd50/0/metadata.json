@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.1",
+  "checkpoint_id": "d8f0abcffd50",
+  "session_id": "5993a343-2277-4a59-a604-bfc964f5cde4",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-14T12:52:54.990811Z",
+  "branch": "fix/depguard-archunit-references",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "articles/7d2428cbcd258d.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "619cc43cded0",
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 62029,
+    "cache_read_tokens": 231110,
+    "output_tokens": 2834,
+    "api_call_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-14T12:52:54.936836Z",
+    "agent_lines": 36,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 36,
+    "agent_percentage": 100
+  }
+}

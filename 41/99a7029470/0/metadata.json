@@ -1,0 +1,95 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "4199a7029470",
+  "session_id": "0a9362e5-6be0-4673-a967-b877f105f452",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-19T04:41:22.449178Z",
+  "branch": "claude/orenovpn-intro-article-9664e2",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "articles/c77f1d1115aa5f.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "6fe76d7115cc",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 64,
+    "cache_creation_tokens": 173507,
+    "cache_read_tokens": 2602652,
+    "output_tokens": 24476,
+    "api_call_count": 34
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01Af9F23BZkz9vLCsynUkQhs",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "anthropic-skills:doc-review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "6fe76d7115cc",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 86,
+        "end": 87,
+        "entry_ids": [
+          "728a06d9-a1b0-475d-8a6f-06f8f1d3c74c"
+        ],
+        "tool_use_id": "toolu_01Af9F23BZkz9vLCsynUkQhs"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Af9F23BZkz9vLCsynUkQhs"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: anthropic-skills:doc-review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-19T04:41:22.430433Z",
+    "agent_lines": 136,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 6,
+    "human_removed": 0,
+    "total_committed": 142,
+    "total_lines_changed": 142,
+    "agent_percentage": 95.77464788732394,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 142,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    }
+  ]
+}

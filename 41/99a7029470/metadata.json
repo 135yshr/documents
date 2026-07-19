@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "4199a7029470",
+  "strategy": "manual-commit",
+  "branch": "claude/orenovpn-intro-article-9664e2",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "articles/c77f1d1115aa5f.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/41/99a7029470/0/metadata.json",
+      "transcript": "/41/99a7029470/0/full.jsonl",
+      "compact_transcript": "/41/99a7029470/0/transcript.jsonl",
+      "content_hash": "/41/99a7029470/0/content_hash.txt",
+      "prompt": "/41/99a7029470/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 64,
+    "cache_creation_tokens": 173507,
+    "cache_read_tokens": 2602652,
+    "output_tokens": 24476,
+    "api_call_count": 34
+  }
+}

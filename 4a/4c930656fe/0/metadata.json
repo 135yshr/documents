@@ -1,0 +1,108 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "4a4c930656fe",
+  "session_id": "0a9362e5-6be0-4673-a967-b877f105f452",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-19T05:29:42.617038Z",
+  "branch": "claude/orenovpn-intro-article-9664e2",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "articles/c77f1d1115aa5f.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "4ed049010e74",
+  "checkpoint_transcript_start": 249,
+  "transcript_lines_at_start": 249,
+  "compact_transcript_start": 69,
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 14186,
+    "cache_read_tokens": 1408100,
+    "output_tokens": 11918,
+    "api_call_count": 10
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-autofix-2026-07-19T04:44:23.326663Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "autofix"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "63ac2d73a12a",
+      "timestamp": "2026-07-19T04:44:23.326663Z",
+      "native": {
+        "command": "/autofix"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/autofix",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01Af9F23BZkz9vLCsynUkQhs",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "anthropic-skills:doc-review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "4ed049010e74",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 86,
+        "end": 87,
+        "entry_ids": [
+          "728a06d9-a1b0-475d-8a6f-06f8f1d3c74c"
+        ],
+        "tool_use_id": "toolu_01Af9F23BZkz9vLCsynUkQhs"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Af9F23BZkz9vLCsynUkQhs"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: anthropic-skills:doc-review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-19T05:29:42.586091Z",
+    "agent_lines": 5,
+    "agent_removed": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 5,
+    "total_lines_changed": 9,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    }
+  ]
+}

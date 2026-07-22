@@ -1,0 +1,92 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "bdca1de51b67",
+  "session_id": "47aadf44-0d34-42dd-9b85-6dfb2865c812",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-22T12:17:05.135133Z",
+  "branch": "meow-article-review-and-wasm-playground",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "reviews/21b1fa2c9365cc_review.md",
+    "reviews/21b1fa2c9365cc_revised.md",
+    "reviews/9eca22f9322c40_review.md",
+    "reviews/9eca22f9322c40_revised.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "644db7f07172",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 195,
+    "cache_creation_tokens": 339449,
+    "cache_read_tokens": 15658521,
+    "output_tokens": 101426,
+    "api_call_count": 105
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_012EaVE1orSVYqYNbj1VyiF8",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "anthropic-skills:doc-review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "644db7f07172",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 453,
+        "end": 454,
+        "entry_ids": [
+          "d0d7c269-9156-4049-a0ea-b94476ac4015"
+        ],
+        "tool_use_id": "toolu_012EaVE1orSVYqYNbj1VyiF8"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_012EaVE1orSVYqYNbj1VyiF8"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: anthropic-skills:doc-review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-22T12:17:05.055615Z",
+    "agent_lines": 631,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 16,
+    "human_removed": 0,
+    "total_committed": 647,
+    "total_lines_changed": 647,
+    "agent_percentage": 97.52704791344668,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

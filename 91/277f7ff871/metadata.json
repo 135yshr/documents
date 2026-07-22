@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "91277f7ff871",
+  "strategy": "manual-commit",
+  "branch": "book/go-service-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "books/go-service-design/config.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/91/277f7ff871/0/metadata.json",
+      "transcript": "/91/277f7ff871/0/full.jsonl",
+      "compact_transcript": "/91/277f7ff871/0/transcript.jsonl",
+      "content_hash": "/91/277f7ff871/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 141,
+    "cache_creation_tokens": 6373,
+    "cache_read_tokens": 1541902,
+    "output_tokens": 5206,
+    "api_call_count": 6
+  }
+}

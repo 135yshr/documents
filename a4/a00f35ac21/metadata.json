@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "a4a00f35ac21",
+  "strategy": "manual-commit",
+  "branch": "book/go-service-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "books/go-service-design/architecture-comparison.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a4/a00f35ac21/0/metadata.json",
+      "transcript": "/a4/a00f35ac21/0/full.jsonl",
+      "compact_transcript": "/a4/a00f35ac21/0/transcript.jsonl",
+      "content_hash": "/a4/a00f35ac21/0/content_hash.txt",
+      "prompt": "/a4/a00f35ac21/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 147,
+    "cache_creation_tokens": 12646,
+    "cache_read_tokens": 2797008,
+    "output_tokens": 8875,
+    "api_call_count": 9
+  }
+}

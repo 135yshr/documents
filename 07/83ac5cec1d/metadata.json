@@ -3,7 +3,7 @@
   "checkpoint_id": "0783ac5cec1d",
   "strategy": "manual-commit",
   "branch": "book/go-service-design",
-  "checkpoints_count": 4,
+  "checkpoints_count": 5,
   "files_touched": [
     "books/go-service-design/aggregate-invariants.md",
     "books/go-service-design/anti-corruption-layer.md",
@@ -50,13 +50,20 @@
       "compact_transcript": "/07/83ac5cec1d/3/transcript.jsonl",
       "content_hash": "/07/83ac5cec1d/3/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/07/83ac5cec1d/4/metadata.json",
+      "transcript": "/07/83ac5cec1d/4/full.jsonl",
+      "compact_transcript": "/07/83ac5cec1d/4/transcript.jsonl",
+      "content_hash": "/07/83ac5cec1d/4/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
-    "input_tokens": 81579,
-    "cache_creation_tokens": 454877,
-    "cache_read_tokens": 945882,
-    "output_tokens": 48060,
-    "api_call_count": 25
+    "input_tokens": 100713,
+    "cache_creation_tokens": 574009,
+    "cache_read_tokens": 1169831,
+    "output_tokens": 60335,
+    "api_call_count": 31
   }
 }

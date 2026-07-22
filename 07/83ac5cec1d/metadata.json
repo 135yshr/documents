@@ -3,22 +3,26 @@
   "checkpoint_id": "0783ac5cec1d",
   "strategy": "manual-commit",
   "branch": "book/go-service-design",
-  "checkpoints_count": 9,
+  "checkpoints_count": 11,
   "files_touched": [
     "books/go-service-design/aggregate-invariants.md",
     "books/go-service-design/anti-corruption-layer.md",
     "books/go-service-design/architecture-comparison.md",
+    "books/go-service-design/conclusion.md",
     "books/go-service-design/config.yaml",
     "books/go-service-design/dependency-rule.md",
     "books/go-service-design/di-composition-root.md",
     "books/go-service-design/domain-events.md",
     "books/go-service-design/enforce-dependency-rule.md",
     "books/go-service-design/error-handling.md",
+    "books/go-service-design/handson-design.md",
+    "books/go-service-design/handson-implementation.md",
     "books/go-service-design/interface-design.md",
     "books/go-service-design/intro.md",
     "books/go-service-design/module-structure.md",
     "books/go-service-design/repository-levels.md",
     "books/go-service-design/testing-strategy.md",
+    "books/go-service-design/transaction-management.md",
     "books/go-service-design/usecase-layer.md",
     "books/go-service-design/validation-design.md",
     "books/go-service-design/value-objects.md"
@@ -86,13 +90,20 @@
       "compact_transcript": "/07/83ac5cec1d/8/transcript.jsonl",
       "content_hash": "/07/83ac5cec1d/8/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/07/83ac5cec1d/9/metadata.json",
+      "transcript": "/07/83ac5cec1d/9/full.jsonl",
+      "compact_transcript": "/07/83ac5cec1d/9/transcript.jsonl",
+      "content_hash": "/07/83ac5cec1d/9/content_hash.txt",
+      "prompt": "/07/83ac5cec1d/9/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 182558,
-    "cache_creation_tokens": 1057663,
-    "cache_read_tokens": 2370762,
-    "output_tokens": 114306,
-    "api_call_count": 59
+    "input_tokens": 229352,
+    "cache_creation_tokens": 1360751,
+    "cache_read_tokens": 14616692,
+    "output_tokens": 209778,
+    "api_call_count": 129
   }
 }

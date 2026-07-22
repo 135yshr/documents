@@ -1,0 +1,86 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "7f25019a75ca",
+  "session_id": "c8c9e5b0-ec68-4ef6-8e8c-fbaed2d6c8be",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-22T13:33:39.191938Z",
+  "branch": "book/go-service-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "books/go-service-design/cover.png"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "aa89a3beda8e",
+  "checkpoint_transcript_start": 584,
+  "transcript_lines_at_start": 584,
+  "compact_transcript_start": 141,
+  "token_usage": {
+    "input_tokens": 2696,
+    "cache_creation_tokens": 32697,
+    "cache_read_tokens": 8849703,
+    "output_tokens": 15782,
+    "api_call_count": 31
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_0153C3wDxnQFj3UrLHDiFwVu",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "stop-ai-slop-jp"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "aa89a3beda8e",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 144,
+        "end": 145,
+        "entry_ids": [
+          "5ad21945-0910-4a8e-9620-3e7c1fffe9db"
+        ],
+        "tool_use_id": "toolu_0153C3wDxnQFj3UrLHDiFwVu"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_0153C3wDxnQFj3UrLHDiFwVu"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: stop-ai-slop-jp",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-22T13:33:39.018118Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 0,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    }
+  ]
+}

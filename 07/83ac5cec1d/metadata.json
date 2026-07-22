@@ -3,11 +3,14 @@
   "checkpoint_id": "0783ac5cec1d",
   "strategy": "manual-commit",
   "branch": "book/go-service-design",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "books/go-service-design/aggregate-invariants.md",
+    "books/go-service-design/anti-corruption-layer.md",
     "books/go-service-design/config.yaml",
     "books/go-service-design/dependency-rule.md",
+    "books/go-service-design/domain-events.md",
+    "books/go-service-design/enforce-dependency-rule.md",
     "books/go-service-design/interface-design.md",
     "books/go-service-design/intro.md",
     "books/go-service-design/repository-levels.md",
@@ -29,13 +32,20 @@
       "compact_transcript": "/07/83ac5cec1d/1/transcript.jsonl",
       "content_hash": "/07/83ac5cec1d/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/07/83ac5cec1d/2/metadata.json",
+      "transcript": "/07/83ac5cec1d/2/full.jsonl",
+      "compact_transcript": "/07/83ac5cec1d/2/transcript.jsonl",
+      "content_hash": "/07/83ac5cec1d/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
-    "input_tokens": 43180,
-    "cache_creation_tokens": 213923,
-    "cache_read_tokens": 419651,
-    "output_tokens": 19910,
-    "api_call_count": 12
+    "input_tokens": 62314,
+    "cache_creation_tokens": 328644,
+    "cache_read_tokens": 641182,
+    "output_tokens": 31438,
+    "api_call_count": 18
   }
 }

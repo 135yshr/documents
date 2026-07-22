@@ -1,0 +1,1 @@
+表紙を作成して本のカバー画像（cover.pngもしくはcover.jpg）を「/books/go-service-design」ディレクトリに配置してください

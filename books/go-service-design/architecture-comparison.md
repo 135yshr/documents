@@ -1,0 +1,142 @@
+---
+title: "アーキテクチャスタイルの選び方〜ヘキサゴナル・オニオン・Vertical Sliceとの比較〜"
+---
+
+## この章で扱うこと
+
+クリーンアーキテクチャを調べていると、ヘキサゴナルアーキテクチャ、オニオンアーキテクチャ、Vertical Slice Architectureといった別の名前が次々に出てきます。「どれを採用すべきか」という問いに時間を使う前に、先に結論を書いておきます。ヘキサゴナル、オニオン、クリーンアーキテクチャの3つは、依存の向きという観点ではほぼ同じものです。選ぶべきは名前ではなく、自分のプロジェクトに合った分割の粒度です。
+
+実際、クリーンアーキテクチャの提唱者であるRobert C. Martin自身が、原典のブログ記事でヘキサゴナルやオニオンを列挙したうえで、こう書いています。
+
+> Though these architectures all vary somewhat in their details, they are very similar. They all have the same objective, which is the separation of concerns.
+>
+> — Robert C. Martin, [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)（2012）
+
+つまりクリーンアーキテクチャは新発明ではなく、先行するアーキテクチャ群の統合です。この章では、それぞれのスタイルが何を強調しているかを整理し、Goのプロジェクトでどう選ぶかの判断基準を示します。
+
+---
+
+## ヘキサゴナルアーキテクチャ（Ports & Adapters）
+
+Alistair Cockburnが2005年に発表したスタイルで、正式名はPorts & Adaptersです。アプリケーションの中心（ビジネスロジック）をポートと呼ばれる抽象で囲み、外部との接続はすべてアダプタ経由にします。
+
+```mermaid
+graph LR
+    subgraph 外側
+        H[HTTPアダプタ]
+        C[CLIアダプタ]
+        P[PostgreSQLアダプタ]
+        S[Slackアダプタ]
+    end
+    subgraph 中心
+        A[アプリケーション<br/>コア]
+    end
+    H -->|駆動する側のポート| A
+    C -->|駆動する側のポート| A
+    A -->|駆動される側のポート| P
+    A -->|駆動される側のポート| S
+```
+
+特徴は次の2点です。
+
+- **レイヤーの数を規定しない**。中心と外側の2つだけです
+- **左右対称の視点**。アプリケーションを駆動する側（HTTP、CLI）と、アプリケーションから駆動される側（DB、外部API）を同じ「ポートとアダプタ」で扱います
+
+第2章で紹介した `core/` と `adapter/` の2層構成は、実質的にヘキサゴナルアーキテクチャそのものです。Goのimplicit interfaceはポートの実装宣言を不要にするので、この2つは相性がよいと私は考えています。
+
+> Allow an application to equally be driven by users, programs, automated test or batch scripts, and to be developed and tested in isolation from its eventual run-time devices and databases.
+>
+> — Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
+
+---
+
+## オニオンアーキテクチャ
+
+Jeffrey Palermoが2008年に提唱したスタイルです。中心にDomain Model、その外にDomain Services、Application Services、最も外側にInfrastructureを置く同心円で、依存はすべて中心に向かいます。
+
+クリーンアーキテクチャの同心円図とほぼ同じに見えますし、実際ほぼ同じです。違いは強調点で、オニオンは「中心はドメインモデルである」と明言している点にDDDとの親和性があります。クリーンアーキテクチャの最内層Entitiesが「エンタープライズ全体のビジネスルール」というやや曖昧な定義なのに対し、オニオンは中心をDDDの語彙で説明します。
+
+Goでの実装に落とすと、`domain/model` を中心に据えて `domain/service`、`usecase`、`infrastructure` を重ねる構成になります。本書で扱ってきた構成と区別がつきません。名前が違うだけ、と理解して差し支えないです。
+
+---
+
+## クリーンアーキテクチャ
+
+2012年にRobert C. Martinが先行スタイルを統合したものです。ヘキサゴナルやオニオンとの差分として意味があるのは、UseCase層（Interactor）を独立した層として明示した点だと私は見ています。
+
+ヘキサゴナルは「中心」の内部構造を規定しません。オニオンはApplication Servicesという層を持ちますが、その責務の説明は薄めです。クリーンアーキテクチャはUse Casesを同心円の1つに昇格させ、「アプリケーション固有のビジネスルールを置く場所」と定義しました。第5章で扱うUseCase層の要否という論点は、この層が明示されたからこそ生まれた議論です。
+
+---
+
+## Vertical Slice Architecture
+
+Vertical Slice Architectureは、ここまでの3つとは分割の軸そのものが違います。Jimmy Bogardが提唱したもので、コードを技術レイヤー（水平方向）ではなく機能（垂直方向）で分割します。
+
+> Instead of coupling across a layer, we couple vertically along a slice.
+>
+> — Jimmy Bogard, [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/)
+
+「注文作成」という機能に必要なハンドラ、ロジック、DBアクセスを1つのスライスにまとめ、スライス間の結合を最小にする考え方です。レイヤー分割への批判として語られることが多いのですが、私は排他的なものだとは考えていません。第2章で示した「モジュールでまず分割し、その中でレイヤーを分ける」構成は、外側の分割がVertical Slice、内側の分割がクリーンアーキテクチャという組み合わせです。
+
+```text
+internal/
+├── order/        # ← ここの分割はVertical Slice的
+│   ├── domain/       # ← ここから内側はクリーンアーキテクチャ的
+│   ├── usecase/
+│   ├── interface/
+│   └── infrastructure/
+└── user/
+    └── ...
+```
+
+スライス内のレイヤーをどこまで薄くするかは機能ごとに変えられます。CRUDだけのスライスならレイヤーを減らし、ロジックの重いスライスだけ層を厚くする。この柔軟さがVertical Sliceの実利です。
+
+---
+
+## 4つのスタイルの比較
+
+| 観点       | ヘキサゴナル       | オニオン             | クリーン          | Vertical Slice     |
+| ---------- | ------------------ | -------------------- | ----------------- | ------------------ |
+| 提唱       | Cockburn（2005）   | Palermo（2008）      | Martin（2012）    | Bogard             |
+| 分割の軸   | 中心と外側         | 同心円レイヤー       | 同心円レイヤー    | 機能               |
+| 依存の向き | 中心へ             | 中心へ               | 中心へ            | スライス内で自由   |
+| 層の数     | 規定しない         | 4層が目安            | 例示は4層（可変） | 規定しない         |
+| 特徴       | ポートの左右対称性 | 中心はドメインモデル | UseCase層の明示   | レイヤー横断の凝集 |
+
+上の3列は本質的に同じもので、依存の向きを守るという1点で一致しています。第2章で「レイヤー数ではなく依存の方向が重要」と書いたのは、この3スタイルすべてに共通する原則です。
+
+---
+
+## Goプロジェクトでの選び方
+
+名前で選ぶのをやめて、プロジェクトの性質で決めます。私の判断基準は次のとおりです。
+
+| 状況 | 構成 |
+| --- | --- |
+| 小さなツール、単機能のマイクロサービス | `core/` と `adapter/` の2層（ヘキサゴナル的） |
+| 複数機能を持つサービス | モジュール分割 × 各モジュール内で3〜4層（Vertical Slice × クリーン） |
+| 機能ごとの複雑さの差が大きい | モジュール分割を優先し、層の厚さはモジュールごとに調整 |
+
+どの構成でも守るものは1つ、依存の向きだけです。逆に言うと、依存の向きさえ守れていれば、途中で構成を変えることは難しくありません。2層で始めたサービスが育ってきたら、`core/` を `domain/` と `usecase/` に割ればよいだけです。私は迷ったら小さい方を選びます。層を増やすのは、増やす理由が実際に現れてからで間に合うからです。
+
+モジュール分割の単位をどう決めるかは、第13章「境界づけられたコンテキストをGoのモジュール構成に落とし込む」で詳しく扱います。
+
+---
+
+## まとめ
+
+- ヘキサゴナル、オニオン、クリーンアーキテクチャは依存の向きという観点では同じものです。どれを「採用」するかの議論に時間を使う必要はありません
+- クリーンアーキテクチャ固有の貢献はUseCase層の明示です。その要否は第5章で判断します
+- Vertical Sliceは分割の軸が違うだけで、レイヤー分割と併用できます。モジュール × レイヤーの構成がGoでの現実解です
+- 迷ったら小さい構成から始めて、育ってから層を増やします
+
+---
+
+## 参考文献
+
+| 内容 | 出典 |
+| --- | --- |
+| クリーンアーキテクチャ原典 | Robert C. Martin, [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)（2012） |
+| ヘキサゴナルアーキテクチャ | Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) |
+| オニオンアーキテクチャ | Jeffrey Palermo, [The Onion Architecture : part 1](https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/)（2008） |
+| Vertical Slice Architecture | Jimmy Bogard, [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/) |

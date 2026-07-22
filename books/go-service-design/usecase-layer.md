@@ -1,0 +1,394 @@
+---
+title: "UseCase層は本当に必要か〜最小構成を考える〜"
+---
+
+## はじめに
+
+:::message
+
+本章は私がGoでクリーンアーキテクチャを採用したプロジェクトを運用する中で得た気づきをまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+
+:::
+
+「UseCase層って、Repositoryを呼ぶだけのパススルーになっていませんか」
+
+GoでクリーンアーキテクチャやDDDを導入すると、この疑問にぶつかる人は多いでしょう。私もそうでした。しかし運用を続ける中で、**一見パススルーに見えるUseCase層にも価値がある**ことに気づきました。
+
+この章では、「UseCase層は不要だ」と考えていた私が**考えを改めた理由**を実体験ベースで共有します。
+
+---
+
+## パススルーUseCaseの誘惑
+
+この章のサンプルコードは、ユーザーデータを収集して分析するSaaSバックエンドを題材にしています。ユーザーの登録、行動分析、利用統計の表示といった機能を持つシステムです。
+
+プロジェクトの初期、こんなUseCaseがいくつもありました。
+
+```go
+// usecase/get_user.go
+type GetUserInteractor struct {
+    repo userReader
+}
+
+func (i *GetUserInteractor) Execute(ctx context.Context, id string) (*GetUserOutput, error) {
+    user, err := i.repo.FindByID(ctx, id)
+    if err != nil {
+        return nil, err
+    }
+    return &GetUserOutput{User: user}, nil
+}
+```
+
+Repositoryの呼び出し1回だけ。「これならHandler層から直接Repositoryを呼べば良いのでは」と何度も思いました。
+
+```go
+// ❌ 一時期検討した構成：Handlerから直接Repositoryを呼ぶ
+func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+    id := r.PathValue("id")
+    user, err := h.repo.FindByID(r.Context(), id)
+    if err != nil {
+        HandleError(w, err)
+        return
+    }
+    writeJSON(w, http.StatusOK, toResponse(user))
+}
+```
+
+しかし、**この構成は採用しませんでした**。理由は3つあります。
+
+---
+
+## 理由1：「パススルー」は長く続かなかった
+
+最初はパススルーだったUseCaseに、次々とロジックが追加されていきました。
+
+### 冪等性チェックの追加
+
+分析処理で、同じユーザーを二重に分析しないためのチェックが必要になりました。APIのリトライや再操作で同じリクエストが複数回送られると、処理が重複してコストが無駄になります。既存の分析結果があればそれを返すことで、無駄な処理を防ぎます。
+
+```go
+// usecase/analyze_user.go
+func (i *AnalyzeUserInteractor) Execute(ctx context.Context, input *AnalyzeInput) (*AnalyzeOutput, error) {
+    // 既に分析済みなら既存の結果を返す（冪等性）
+    existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check existing result: %w", err)
+    }
+    if existing != nil {
+        return &AnalyzeOutput{Result: existing, IsNew: false}, nil
+    }
+
+    // 新規分析を実行
+    result, err := i.analyzer.Analyze(ctx, input.Content)
+    if err != nil {
+        return nil, err
+    }
+
+    if err := i.resultRepo.Save(ctx, result); err != nil {
+        return nil, fmt.Errorf("failed to save result: %w", err)
+    }
+
+    return &AnalyzeOutput{Result: result, IsNew: true}, nil
+}
+```
+
+### 排他制御の追加
+
+ユーザーの一括インポートで、同時実行を防ぐチェックが必要になりました。インポート処理は外部APIを叩きながら大量のデータを取り込むため、同時に複数実行するとAPIのレートリミットに抵触したり、データの整合性が崩れたりするリスクがあります。
+
+```go
+// usecase/import_users.go
+func (i *ImportUsersInteractor) Execute(ctx context.Context, input *ImportUsersInput) (*ImportUsersOutput, error) {
+    // バリデーション
+    if err := i.validateSource(input.Source); err != nil {
+        return nil, err
+    }
+
+    // 排他チェック：処理中のインポートがあれば拒否
+    running, err := i.importRepo.ExistsPendingOrProcessing(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check running imports: %w", err)
+    }
+    if running {
+        return nil, apperror.ErrAlreadyRunning
+    }
+
+    // ドメインオブジェクト生成
+    task := model.NewImportTask(input.Source, input.WebhookURL)
+    if err := i.importRepo.Save(ctx, task); err != nil {
+        return nil, fmt.Errorf("failed to save import task: %w", err)
+    }
+
+    return &ImportUsersOutput{TaskID: task.ID, Status: string(task.Status)}, nil
+}
+```
+
+### 複数戦略の組み合わせ
+
+プロジェクトの成長に伴い、分析の観点が増えました。当初はセキュリティリスクの検出だけでしたが、利用パターンの分類も必要になり、両方の結果を統合して1つのレポートにまとめる要件が生まれました。こうして分析UseCaseが、セキュリティ分析と利用分類を組み合わせるオーケストレーターになりました。
+
+```go
+// usecase/full_analyze.go
+type FullAnalyzeInteractor struct {
+    resultRepo       resultWriter
+    securityAnalyzer securityAnalyzer
+    usageClassifier  usageClassifier
+}
+
+func (i *FullAnalyzeInteractor) Execute(ctx context.Context, input *AnalyzeInput) (*FullAnalyzeOutput, error) {
+    // 冪等性チェック
+    existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check existing: %w", err)
+    }
+    if existing != nil {
+        return &FullAnalyzeOutput{Result: existing, IsNew: false}, nil
+    }
+
+    // セキュリティ分析
+    secResult, err := i.securityAnalyzer.Analyze(ctx, input)
+    if err != nil {
+        return nil, fmt.Errorf("security analysis failed: %w", err)
+    }
+
+    // 利用分類
+    classResult, err := i.usageClassifier.Classify(ctx, input)
+    if err != nil {
+        return nil, fmt.Errorf("usage classification failed: %w", err)
+    }
+
+    // 結果をマージ
+    merged := model.MergeAnalysisResults(secResult, classResult)
+
+    if err := i.resultRepo.Save(ctx, merged); err != nil {
+        return nil, fmt.Errorf("failed to save merged result: %w", err)
+    }
+
+    return &FullAnalyzeOutput{Result: merged, IsNew: true}, nil
+}
+```
+
+最初は「Repositoryを呼ぶだけ」だったUseCaseが、**冪等性・排他制御・複数戦略の組み合わせ**を担う重要な層に成長しました。もしHandler層に直接書いていたら、これらのロジックが漏れ出していたでしょう。
+
+---
+
+## 理由2：バッチ処理が入るとUseCaseの価値が明確になる
+
+単件分析のAPIはあったものの、数百人のユーザーを一括で分析したいという要望が運用チームから上がりました。1件ずつAPIを叩くのは非効率なため、バッチ処理のUseCaseを新設しました。このUseCaseは最初から複雑です。
+
+```go
+// usecase/batch_analyze.go
+type BatchAnalyzeInteractor struct {
+    singleAnalyzer singleAnalyzer
+    resultRepo     resultWriter
+}
+
+func (i *BatchAnalyzeInteractor) Execute(ctx context.Context, input *BatchInput) (*BatchOutput, error) {
+    output := &BatchOutput{}
+    start := time.Now()
+
+    for _, user := range input.Users {
+        result, err := i.singleAnalyzer.Analyze(ctx, &AnalyzeInput{
+            UserID:  user.ID,
+            Content: user.Content,
+        })
+        if err != nil {
+            output.FailureCount++
+            output.Errors = append(output.Errors, BatchError{
+                UserID: user.ID,
+                Error:  err.Error(),
+            })
+            continue  // 1件の失敗で全体を止めない
+        }
+        output.SuccessCount++
+        output.Results = append(output.Results, result)
+    }
+
+    output.TotalProcessed = len(input.Users)
+    output.DurationMs = time.Since(start).Milliseconds()
+    return output, nil
+}
+```
+
+バッチ処理は「1件失敗しても残りは続行する」「進捗を集計する」といった**アプリケーション固有のロジック**を含みます。これはドメイン層の責務でもインフラ層の責務でもありません。
+
+---
+
+## 理由3：ドメインモデルの詳細をHandler層から隠せる
+
+「Handler側でinterfaceを定義すれば、UseCase層がなくても依存性逆転は成立する」という指摘はその通りです。
+
+```go
+// UseCase層なしでも依存方向は保てる
+type userFinder interface {
+    FindByID(ctx context.Context, id string) (*model.User, error)
+}
+
+type UserHandler struct {
+    repo userFinder
+}
+```
+
+ただし、この構成ではHandler層が**ドメインモデル（`*model.User`）の構造を直接知る**ことになります。UseCase層を挟むと、Handler層はUseCaseのInput/Output DTOだけに依存し、ドメインモデルの変更がHandler層に波及しません。
+
+```text
+Handler → UseCase → Repository → Domain Model
+Handler層はUseCaseのDTOだけを知る
+```
+
+Handler層のテストでも、UseCaseの振る舞いだけをモックすれば済みます。ドメインモデルを変更してもHandlerのテストは壊れません。
+
+---
+
+## 「パススルーUseCase」は本当に無駄か
+
+ここまでの話を踏まえても、読み取り専用のUseCaseは依然としてシンプルです。たとえば、ユーザー分析の成功率や平均処理時間を管理画面に表示するための統計APIがそうです。
+
+```go
+// usecase/get_statistics.go
+type GetStatisticsInteractor struct {
+    reader resultReader
+}
+
+func (i *GetStatisticsInteractor) Execute(ctx context.Context, input *GetStatsInput) (*GetStatsOutput, error) {
+    stats, err := i.reader.GetStatistics(ctx, input.Filter)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get statistics: %w", err)
+    }
+    return &GetStatsOutput{Statistics: stats}, nil
+}
+```
+
+これは「パススルー」に見えます。しかし、**将来ロジックを追加する場所が確保されている**点に価値があります。
+
+実際に私のプロジェクトでは、この統計UseCaseへ後からキャッシュロジックやアクセス権チェックを追加しました。UseCase層がなければHandler層へ書くことになり、複数箇所でロジックが重複したでしょう。
+
+---
+
+## UseCaseの複雑さのスペクトル
+
+私のプロジェクトのUseCaseを複雑さ順に並べると、次のようになります。
+
+| UseCase                 | 複雑さ | 含むロジック                                         |
+| ----------------------- | ------ | ---------------------------------------------------- |
+| GetStatisticsInteractor | 低     | Repositoryの呼び出しのみ                             |
+| GetUserInteractor       | 低     | 存在チェック + DTO変換                               |
+| ImportUsersInteractor   | 中     | バリデーション + 排他制御 + ドメインオブジェクト生成 |
+| AnalyzeUserInteractor   | 中     | 冪等性チェック + 外部サービス呼び出し + 永続化       |
+| FullAnalyzeInteractor   | 高     | 冪等性 + 複数戦略の組み合わせ + 結果マージ           |
+| BatchAnalyzeInteractor  | 高     | 部分失敗の許容 + 進捗集計 + エラー集約               |
+
+「低」のUseCaseも含めて**全機能にUseCase層を持たせる**ことで、チーム内の設計が統一されます。「この機能にはUseCaseがあるのに、あの機能にはない」という混乱が起きません。
+
+---
+
+## ディレクトリ構成
+
+私のプロジェクトでは、モジュールごとに同じ構成を適用しています。
+
+```text
+internal/{module}/
+├── domain/
+│   ├── model/               # エンティティ + 値オブジェクト
+│   └── repository/          # Repository interface
+├── usecase/                  # UseCase（常に存在する）
+│   ├── port/output/          # Output Port（外部サービス抽象化）
+│   ├── import_users.go
+│   ├── get_user.go
+│   ├── analyze_user.go
+│   ├── batch_analyze.go
+│   └── dto.go               # Input/Output DTO
+├── interface/
+│   └── rest/
+│       ├── handler/
+│       ├── dto/              # リクエスト/レスポンスDTO
+│       └── mapper/           # ドメイン ↔ REST DTO変換
+├── infrastructure/
+│   └── postgres/
+└── di/
+    └── provider.go           # DI設定
+```
+
+`usecase/`ディレクトリがすべてのモジュールに存在します。
+
+---
+
+## よくある疑問と私の考え
+
+### 「パススルーUseCaseはYAGNI違反ではないか」
+
+> You Ain't Gonna Need It
+>
+> — Ron Jeffries, _Extreme Programming Installed_
+
+これは私も導入当初に悩んだ点です。「必要になってからUseCase層を追加すればいい」という反論は正当です。Go のimplicit interfaceがあれば、後からUseCase層を差し込むリファクタリングは技術的に可能です。
+
+ただ、私のプロジェクトでは**複数機能に同時にUseCase層を追加する場面**がありました。認可チェックを全機能に入れるとき、UseCase層がある機能とない機能が混在していると問題になります。修正箇所の特定と影響範囲の把握に時間がかかるからです。最初から統一しておく方がこうした横断的変更のコストが低いと感じました。
+
+ただし、これは私のプロジェクト（分析・バッチ処理が中心）での経験です。**CRUD中心のシンプルなアプリケーションなら、パススルーのまま残るUseCaseが多い**でしょう。そうしたプロジェクトでは、必要になった時点で段階的に導入する方が合理的です。
+
+### 「Go のシンプルさの哲学に反しないか」
+
+> Simplicity is Complicated.
+>
+> — Rob Pike, [Simplicity is Complicated](https://go.dev/talks/2015/simplicity-is-complicated.slide)
+
+この疑問ももっともです。ただ、Rob Pikeが言う「シンプル」は「コードが少ない」ことではなく、**概念モデルがシンプル**であることだと私は理解しています。「ビジネスロジックは常にUseCase層にある」という統一ルールは、概念的にシンプルだと感じています。
+
+### 「テストが面倒にならないか」
+
+実際にはそこまで負担は増えませんでした。UseCaseのinterfaceは利用側（Handler）で定義するため、モックは1〜2メソッドの小さなinterfaceになります。
+
+```go
+// interface/rest/handler/user_handler.go
+type userImporter interface {
+    Execute(ctx context.Context, input *usecase.ImportUsersInput) (*usecase.ImportUsersOutput, error)
+}
+
+type UserHandler struct {
+    importer userImporter
+}
+```
+
+```go
+// テスト
+type mockImporter struct {
+    output *usecase.ImportUsersOutput
+    err    error
+}
+
+func (m *mockImporter) Execute(_ context.Context, _ *usecase.ImportUsersInput) (*usecase.ImportUsersOutput, error) {
+    return m.output, m.err
+}
+```
+
+テストはシンプルです。パススルーUseCase自体のテストは「Repositoryの戻り値をそのまま返す」ことの確認だけなので、情報量は少なくなります。それでも、ロジック追加時にテストファイルが既に存在していると、テスト追加の心理的ハードルは下がります。
+
+---
+
+## まとめ
+
+| 当初の考え | 運用後の気づき |
+| --- | --- |
+| パススルーUseCaseは無駄です | 後からロジックが追加される場所として価値があります |
+| CRUDならHandler直接呼びで良いです | ドメインモデルがHandler層に漏れます。統一構造の方がチームに優しくなります |
+| UseCase層は複雑さに応じて省略すべきです | 全機能に統一して持つ方が迷いが減ります |
+
+UseCase層は「すべての機能に必要」です。複雑さは機能によって異なりますが、重要なのは**ビジネスロジックの置き場所を統一する**ことです。
+
+「パススルーUseCase」は問題のサインではなく、**将来のロジック追加に備えた設計の余白**です。
+
+---
+
+## 参考文献
+
+| 内容 | 出典 |
+| --- | --- |
+| クリーンアーキテクチャ原典 | Robert C. Martin, _Clean Architecture_（2017） |
+| YAGNI原則 | Ron Jeffries, [You're NOT gonna need it!](https://ronjeffries.com/xprog/articles/practices/pracnotneed/) |
+| Goのシンプルさの哲学 | Rob Pike, [Simplicity is Complicated](https://go.dev/talks/2015/simplicity-is-complicated.slide) |
+| Vertical Slice Architecture（本章とは異なるアプローチだが、層の要否を考える際の対比として参考になる） | Jimmy Bogard, [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/) |
+| DDDの戦術的設計 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
+
+</content>
+</invoke>

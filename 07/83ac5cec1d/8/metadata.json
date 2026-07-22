@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "0783ac5cec1d",
+  "session_id": "bbb5b5b4-39a4-4169-9a85-f21dbef14216",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-22T12:35:58.872302Z",
+  "branch": "book/go-service-design",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "books/go-service-design/aggregate-invariants.md",
+    "books/go-service-design/anti-corruption-layer.md",
+    "books/go-service-design/architecture-comparison.md",
+    "books/go-service-design/config.yaml",
+    "books/go-service-design/dependency-rule.md",
+    "books/go-service-design/domain-events.md",
+    "books/go-service-design/enforce-dependency-rule.md",
+    "books/go-service-design/error-handling.md",
+    "books/go-service-design/interface-design.md",
+    "books/go-service-design/intro.md",
+    "books/go-service-design/module-structure.md",
+    "books/go-service-design/repository-levels.md",
+    "books/go-service-design/testing-strategy.md",
+    "books/go-service-design/usecase-layer.md",
+    "books/go-service-design/validation-design.md",
+    "books/go-service-design/value-objects.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8",
+  "turn_id": "2eeacae8aa53",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 19134,
+    "cache_creation_tokens": 127021,
+    "cache_read_tokens": 240519,
+    "output_tokens": 15698,
+    "api_call_count": 6
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-22T12:35:58.859456Z",
+    "agent_lines": 6710,
+    "agent_removed": 0,
+    "human_added": 1112,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 7822,
+    "total_lines_changed": 7822,
+    "agent_percentage": 85.78368703656353,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

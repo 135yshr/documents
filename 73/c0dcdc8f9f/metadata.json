@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "73c0dcdc8f9f",
+  "strategy": "manual-commit",
+  "branch": "meow-article-review-and-wasm-playground",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "articles/938c4e0040bfb0.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/73/c0dcdc8f9f/0/metadata.json",
+      "transcript": "/73/c0dcdc8f9f/0/full.jsonl",
+      "compact_transcript": "/73/c0dcdc8f9f/0/transcript.jsonl",
+      "content_hash": "/73/c0dcdc8f9f/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 244,
+    "cache_creation_tokens": 374242,
+    "cache_read_tokens": 22209433,
+    "output_tokens": 120658,
+    "api_call_count": 131
+  }
+}

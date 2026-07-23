@@ -1,0 +1,100 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "e1a8fd4e229f",
+  "session_id": "fcf520ae-abcb-4c7a-b6ad-e2aaf4a07cc0",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-23T02:47:19.165121Z",
+  "branch": "worktree-flickering-soaring-quill",
+  "checkpoints_count": 4,
+  "save_step_count": 4,
+  "files_touched": [
+    "books/go-service-design/aggregate-invariants.md",
+    "books/go-service-design/config.yaml",
+    "books/go-service-design/error-handling.md",
+    "books/go-service-design/handson-implementation.md",
+    "books/go-service-design/interface-design.md",
+    "books/go-service-design/intro.md",
+    "books/go-service-design/testing-strategy.md",
+    "books/go-service-design/usecase-layer.md",
+    "books/go-service-design/validation-design.md",
+    "books/go-service-design/value-objects.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "5270d063484c",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 19644,
+    "cache_creation_tokens": 77124,
+    "cache_read_tokens": 2096126,
+    "output_tokens": 18427,
+    "api_call_count": 34
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-23T02:47:19.150382Z",
+    "agent_lines": 10,
+    "agent_removed": 12,
+    "human_added": 0,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 12,
+    "total_lines_changed": 24,
+    "agent_percentage": 91.66666666666666,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 1,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2,
+      "agent_lines_removed": 2,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2,
+      "agent_lines_removed": 2,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 12,
+      "agent_lines_removed": 12,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    }
+  ]
+}

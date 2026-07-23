@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "e1a8fd4e229f",
+  "strategy": "manual-commit",
+  "branch": "worktree-flickering-soaring-quill",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "books/go-service-design/aggregate-invariants.md",
+    "books/go-service-design/config.yaml",
+    "books/go-service-design/error-handling.md",
+    "books/go-service-design/handson-implementation.md",
+    "books/go-service-design/interface-design.md",
+    "books/go-service-design/intro.md",
+    "books/go-service-design/testing-strategy.md",
+    "books/go-service-design/usecase-layer.md",
+    "books/go-service-design/validation-design.md",
+    "books/go-service-design/value-objects.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e1/a8fd4e229f/0/metadata.json",
+      "transcript": "/e1/a8fd4e229f/0/full.jsonl",
+      "compact_transcript": "/e1/a8fd4e229f/0/transcript.jsonl",
+      "content_hash": "/e1/a8fd4e229f/0/content_hash.txt",
+      "prompt": "/e1/a8fd4e229f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 19644,
+    "cache_creation_tokens": 77124,
+    "cache_read_tokens": 2096126,
+    "output_tokens": 18427,
+    "api_call_count": 34
+  }
+}

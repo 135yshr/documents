@@ -1,14 +1,14 @@
 ---
-title: "Repositoryの抽象化レベル〜DB依存をどこまで剥がすか〜"
+title: "Repository の抽象化レベル〜DB 依存をどこまで剥がすか〜"
 ---
 
 ## はじめに
 
-GoでDDDやクリーンアーキテクチャを導入すると、ほぼ確実に「Repository interface」が登場します。ドメイン層にinterfaceを定義し、infrastructure層で具体的なデータベースアクセスを実装するパターンです。
+Go で DDD やクリーンアーキテクチャを導入すると、ほぼ確実に「Repository interface」が登場します。ドメイン層に interface を定義し、infrastructure 層で具体的なデータベースアクセスを実装するパターンです。
 
-しかし実務では、「このinterface、本当に必要なのか」と疑問に感じる場面が出てきます。sqlc が生成するコードは十分にテスタブルですし、ent のスキーマ定義はドメインモデルに近い表現力を持っています。**DB依存を完全に剥がすことがゴールではなく、プロジェクトの状況に応じた適切な抽象化レベルを選ぶことが重要です**。
+しかし実務では、「この interface、本当に必要なのか」と疑問に感じる場面が出てきます。sqlc が生成するコードは十分にテスタブルですし、ent のスキーマ定義はドメインモデルに近い表現力を持っています。**DB 依存を完全に剥がすことがゴールではなく、プロジェクトの状況に応じた適切な抽象化レベルを選ぶことが重要です**。
 
-この章では、Repositoryの抽象化を3つのレベルに分類し、それぞれのメリット・デメリットとGoのエコシステムとの相性を整理します。
+この章では、Repository の抽象化を3つのレベルに分類し、それぞれのメリット・デメリットと Go のエコシステムとの相性を整理します。
 
 ---
 
@@ -26,13 +26,13 @@ Edward Hieatt と Rob Mee もこう補足しています。
 >
 > — Edward Hieatt and Rob Mee, [P of EAA: Repository](https://martinfowler.com/eaaCatalog/repository.html)
 
-どちらも強調しているのは、Repository は**コレクションのように振る舞う抽象**だということです。SQLを隠蔽することが目的ではなく、ドメインオブジェクトの永続化と取得を「集合操作」として表現することがねらいです。
+どちらも強調しているのは、Repository は**コレクションのように振る舞う抽象**だということです。SQL を隠蔽することが目的ではなく、ドメインオブジェクトの永続化と取得を「集合操作」として表現することがねらいです。
 
 ---
 
 ## 3つの抽象化レベル
 
-Repositoryの抽象化レベルを整理すると、大きく以下の3つに分けられるのではないでしょうか。
+Repository の抽象化レベルを整理すると、大きく以下の3つに分けられるのではないでしょうか。
 
 ```mermaid
 graph LR
@@ -44,9 +44,9 @@ graph LR
     style C fill:#ffebee,color:#000000
 ```
 
-### レベル1：完全抽象（ドメイン層にinterface定義）
+### レベル1：完全抽象（ドメイン層に interface 定義）
 
-教科書的なDDDのアプローチです。ドメイン層にRepository interfaceを定義し、infrastructure層で実装します。Go の「利用側で interface を定義する」慣習に従い、usecase 層の各 Interactor が必要なメソッドだけを持つ小さな interface を定義する方法と併用できます。本章では Reader/Writer の分離を `domain/repository` に置く例を示します。Interactor ごとにさらに絞り込む方法は、第3章「Goのinterface設計」で詳しく解説しています。
+教科書的な DDD のアプローチです。ドメイン層に Repository interface を定義し、infrastructure 層で実装します。Go の「利用側で interface を定義する」慣習に従い、usecase 層の各 Interactor が必要なメソッドだけを持つ小さな interface を定義する方法と併用できます。本章では Reader/Writer の分離を `domain/repository` に置く例を示します。Interactor ごとにさらに絞り込む方法は、第3章「Go の interface 設計」で詳しく解説しています。
 
 ```go
 // domain/repository/task_repository.go
@@ -93,13 +93,13 @@ func (r *TaskRepository) Save(ctx context.Context, task *model.Task) error {
 
 **向いているケース：**
 
-- DBの種類を将来変更する可能性があります（PostgreSQL → DynamoDB 等）
+- DB の種類を将来変更する可能性があります（PostgreSQL → DynamoDB 等）
 - 複数のストレージを使い分けます（RDB + Redis + S3）
-- ドメインモデルとDBスキーマに大きな乖離があります
+- ドメインモデルと DB スキーマに大きな乖離があります
 
 ### レベル2：薄い抽象（ORM/クエリビルダーの型をそのまま活用）
 
-sqlc や ent が生成する型をusecase層でそのまま使い、テスト時はinterfaceで差し替えるアプローチです。usecase層が生成コード（infrastructure由来）の型に直接依存するため、[クリーンアーキテクチャの依存関係ルール](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)には厳密に違反します。このトレードオフを受け入れられるかがレベル2を採用する際の判断ポイントです。
+sqlc や ent が生成する型を usecase 層でそのまま使い、テスト時は interface で差し替えるアプローチです。usecase 層が生成コード（infrastructure 由来）の型に直接依存するため、[クリーンアーキテクチャの依存関係ルール](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)には厳密に違反します。このトレードオフを受け入れられるかがレベル2を採用する際の判断ポイントです。
 
 sqlc はデフォルトでメソッドを持つ `Queries` 構造体を生成します。`sqlc.yaml` で `emit_interface: true` を設定すると、さらに `Querier` interface が生成されます。この `Querier` interface をそのまま利用すれば、テスト時にモックへ差し替えられます。
 
@@ -142,15 +142,15 @@ func (i *TaskInteractor) GetTask(ctx context.Context, id string) (*TaskOutput, e
 
 **向いているケース：**
 
-- DBの種類が固定されています
-- ドメインモデルとDBスキーマがほぼ一致しています
+- DB の種類が固定されています
+- ドメインモデルと DB スキーマがほぼ一致しています
 - sqlc / ent の interface をそのままテスト用のモックとして使えます
 
 レベル2では、sqlc の生成エラー（`sql.ErrNoRows` 等）が usecase 層にそのまま漏れる点にも注意が必要です。第7章「エラーハンドリング設計」で解説したエラー変換の仕組みを入れるか、handler 層で infrastructure 固有のエラーを変換する必要があります。
 
 ### レベル3：直接依存（抽象化なし）
 
-Repository interfaceを作らず、infrastructure層の実装を直接使います。
+Repository interface を作らず、infrastructure 層の実装を直接使います。
 
 ```go
 // usecase/task_interactor.go
@@ -168,18 +168,18 @@ func (i *TaskInteractor) GetTask(ctx context.Context, id string) (*TaskOutput, e
 **向いているケース：**
 
 - プロトタイプや小規模ツールです
-- DBアクセスが数箇所に限定されています
-- テストではテスト用DBを使う方針です
+- DB アクセスが数箇所に限定されています
+- テストではテスト用 DB を使う方針です
 
 ---
 
 ## Go ORM との共存パターン
 
-GoのORM/クエリジェネレーターそれぞれと、Repository パターンの相性を整理します。
+Go の ORM/クエリジェネレーターそれぞれと、Repository パターンの相性を整理します。
 
 ### sqlc：レベル2と好相性
 
-[sqlc](https://sqlc.dev/) はSQLファイルからGoのコードを生成するツールです。前述のとおり `emit_interface: true` を設定すると `Querier` interface が生成されるため、これをテスト時のモック差し替えに活用できます。
+[sqlc](https://sqlc.dev/) は SQL ファイルから Go のコードを生成するツールです。前述のとおり `emit_interface: true` を設定すると `Querier` interface が生成されるため、これをテスト時のモック差し替えに活用できます。
 
 ```sql
 -- query/task.sql
@@ -192,7 +192,7 @@ SELECT id, title, status, created_at FROM tasks WHERE status = $1;
 
 sqlc が生成する `Querier` interface をそのまま使う方法と、利用側で必要なメソッドだけに絞った interface を定義する方法の2つがあります。
 
-前者はシンプルですが、usecase層が `Querier` の全メソッドに依存します。後者は Go の「利用側で interface を定義する」慣習に沿った方法で、依存するメソッドを明示できます。
+前者はシンプルですが、usecase 層が `Querier` の全メソッドに依存します。後者は Go の「利用側で interface を定義する」慣習に沿った方法で、依存するメソッドを明示できます。
 
 ```go
 // usecase/task_interactor.go
@@ -212,7 +212,7 @@ type TaskInteractor struct {
 
 ### ent：レベル1〜2の間
 
-[ent](https://entgo.io/) はスキーマ定義からGoのコードを生成するORMです。エンティティの関連やバリデーションをスキーマで定義できるため、DDDのドメインモデルに近い表現力があります。
+[ent](https://entgo.io/) はスキーマ定義から Go のコードを生成する ORM です。エンティティの関連やバリデーションをスキーマで定義できるため、DDD のドメインモデルに近い表現力があります。
 
 ```go
 // ent/schema/task.go
@@ -245,7 +245,7 @@ func (r *taskRepository) FindByID(ctx context.Context, id string) (*model.Task, 
 
 ### GORM：レベル1を推奨
 
-[GORM](https://gorm.io/) は `*gorm.DB` を中心に操作するため、モックによるユニットテストでは interface が必要です。ただし、GORM は SQLite（インメモリ）ドライバをサポートしているため、インテグレーションテストであれば interface なしでも高速にテストを実行できます。モックによるユニットテストが必要な場合や、DB固有の挙動へ依存しない設計にしたい場合は、Repository interface で包む方法をおすすめします。
+[GORM](https://gorm.io/) は `*gorm.DB` を中心に操作するため、モックによるユニットテストでは interface が必要です。ただし、GORM は SQLite（インメモリ）ドライバをサポートしているため、インテグレーションテストであれば interface なしでも高速にテストを実行できます。モックによるユニットテストが必要な場合や、DB 固有の挙動へ依存しない設計にしたい場合は、Repository interface で包む方法をおすすめします。
 
 ```go
 // infrastructure/gormadapter/task_repository.go
@@ -278,7 +278,7 @@ ORM を使わず標準ライブラリの `database/sql` を直接使う場合は
 
 ## テスタビリティとのトレードオフ
 
-「テストのためだけにinterfaceを作るべきか」はGoコミュニティでも議論が続くテーマです。私の判断基準を整理します。
+「テストのためだけに interface を作るべきか」は Go コミュニティでも議論が続くテーマです。私の判断基準を整理します。
 
 ### interface を作るべきケース
 
@@ -298,11 +298,11 @@ func TestGetTaskInteractor(t *testing.T) {
 }
 ```
 
-ユニットテストの高速化やCI環境でのDB不要化が目的なら、interfaceは正当なコストです。
+ユニットテストの高速化や CI 環境での DB 不要化が目的なら、interface は正当なコストです。
 
 ### interface を作らなくてよいケース
 
-テストでもデータベースを使う（インテグレーションテスト）方針であれば、interfaceは不要な場合があります。
+テストでもデータベースを使う（インテグレーションテスト）方針であれば、interface は不要な場合があります。
 
 ```go
 func TestGetTask_Integration(t *testing.T) {
@@ -316,7 +316,7 @@ func TestGetTask_Integration(t *testing.T) {
 }
 ```
 
-[testcontainers-go](https://github.com/testcontainers/testcontainers-go) を使えば、CIでもDockerコンテナ上のDBに対してテストを実行できます。この場合、Repository interfaceなしでもテスタビリティは確保されます。
+[testcontainers-go](https://github.com/testcontainers/testcontainers-go) を使えば、CI でも Docker コンテナ上の DB に対してテストを実行できます。この場合、Repository interface なしでもテスタビリティは確保されます。
 
 ### 判断フローチャート
 
@@ -337,15 +337,15 @@ flowchart TD
 
 最終的に、どのレベルを採用するかはプロジェクトの状況によります。以下のチェックリストを参考にしてください。
 
-| 質問                                           | Yes →        | No →        |
-| ---------------------------------------------- | ------------ | ----------- |
-| DBの種類を将来変更する可能性があるか           | レベル1      | レベル2以下 |
-| ドメインモデルとDBスキーマに大きな差異があるか | レベル1      | レベル2     |
-| ユニットテストでDBを差し替えたいか             | レベル1 or 2 | レベル3     |
-| 複数人で同じ Repository を変更するか           | レベル1 or 2 | 自由        |
-| プロトタイプ段階か                             | レベル3      | -           |
+| 質問                                             | Yes →        | No →        |
+| ------------------------------------------------ | ------------ | ----------- |
+| DB の種類を将来変更する可能性があるか            | レベル1      | レベル2以下 |
+| ドメインモデルと DB スキーマに大きな差異があるか | レベル1      | レベル2     |
+| ユニットテストで DB を差し替えたいか             | レベル1 or 2 | レベル3     |
+| 複数人で同じ Repository を変更するか             | レベル1 or 2 | 自由        |
+| プロトタイプ段階か                               | レベル3      | -           |
 
-重要なのは、**最初から完全抽象を目指さなくてもよい**ということです。Go のimplicit interfaceを活かせば、後からinterfaceを追加しても既存の実装コードを変更する必要がありません。
+重要なのは、**最初から完全抽象を目指さなくてもよい**ということです。Go の implicit interface を活かせば、後から interface を追加しても既存の実装コードを変更する必要がありません。
 
 以下のコード例は、クリーンアーキテクチャ導入前のレベル3の状態から、段階的にレベル1へ引き上げるリファクタリングの流れを示しています。Step 1 はリファクタリング前の状態であり、usecase 層が infrastructure 層の具体型に直接依存しています。この依存関係ルール違反を解消するのが Step 2 です。
 
@@ -372,17 +372,17 @@ Go の implicit interface により、Step 2 で `taskReader` を追加しても
 
 ## まとめ
 
-| レベル            | 概要                            | 適用場面                 |
-| ----------------- | ------------------------------- | ------------------------ |
-| レベル1：完全抽象 | ドメイン層に interface 定義     | 大規模・DB変更可能性あり |
-| レベル2：薄い抽象 | ORM/生成コードの interface 活用 | sqlc 利用・中規模        |
-| レベル3：直接依存 | 抽象化なし                      | プロトタイプ・小規模     |
+| レベル            | 概要                            | 適用場面                  |
+| ----------------- | ------------------------------- | ------------------------- |
+| レベル1：完全抽象 | ドメイン層に interface 定義     | 大規模・DB 変更可能性あり |
+| レベル2：薄い抽象 | ORM/生成コードの interface 活用 | sqlc 利用・中規模         |
+| レベル3：直接依存 | 抽象化なし                      | プロトタイプ・小規模      |
 
-Repository パターンの本質は「DB依存の排除」ではなく、「ドメインオブジェクトの集合操作を表現する」ことです。過度な抽象化は複雑性を増し、抽象化の不足はテスタビリティを損ないます。プロジェクトの規模、チーム構成、テスト方針に応じて**適切なレベルを選ぶ**ことが大切です。
+Repository パターンの本質は「DB 依存の排除」ではなく、「ドメインオブジェクトの集合操作を表現する」ことです。過度な抽象化は複雑性を増し、抽象化の不足はテスタビリティを損ないます。プロジェクトの規模、チーム構成、テスト方針に応じて**適切なレベルを選ぶ**ことが大切です。
 
 では「最低限どこまでやるべきか」という問いに対する私の回答は、**最初からレベル1で設計する**です。私自身、すべてのプロジェクトでレベル1を採用しています。ドメイン層に interface を定義するコストは小さく、テスタビリティ・依存関係の明確さ・将来の変更への耐性を最初から手に入れられます。
 
-一方で、Go のimplicit interfaceは「後から抽象化を追加しても既存コードを変更しなくてよい」という大きな利点を持っています。プロトタイプや小規模ツールでは、レベル3から始めて必要になった時点でレベル1に引き上げる選択肢もあります。
+一方で、Go の implicit interface は「後から抽象化を追加しても既存コードを変更しなくてよい」という大きな利点を持っています。プロトタイプや小規模ツールでは、レベル3から始めて必要になった時点でレベル1に引き上げる選択肢もあります。
 
 ---
 

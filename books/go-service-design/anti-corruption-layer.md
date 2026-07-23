@@ -1,40 +1,40 @@
 ---
-title: "腐敗防止層（ACL）〜外部APIの形式を翻訳する〜"
+title: "腐敗防止層（ACL）〜外部 API の形式を翻訳する〜"
 ---
 
 ## はじめに
 
-外部APIやレガシーシステムと連携する際、相手のデータ構造をそのまま自分のドメインモデルへ持ち込むと、ドメインが外部の都合で振り回されるようになります。APIの仕様変更がドメインロジックに波及し、テストも壊れます。
+外部 API やレガシーシステムと連携する際、相手のデータ構造をそのまま自分のドメインモデルへ持ち込むと、ドメインが外部の都合で振り回されるようになります。API の仕様変更がドメインロジックに波及し、テストも壊れます。
 
-この問題を防ぐための設計パターンが **腐敗防止層（Anti-Corruption Layer、以下ACL）** です。本章では、ACLの目的を整理した上で、GoでのFacade / Adapter / Translatorパターンの実装例を紹介します。
+この問題を防ぐための設計パターンが **腐敗防止層（Anti-Corruption Layer、以下 ACL）** です。本章では、ACL の目的を整理した上で、Go での Facade / Adapter / Translator パターンの実装例を紹介します。
 
 ---
 
 ## 腐敗防止層とは
 
-腐敗防止層は、Eric Evansが『Domain-Driven Design』で定義したパターンです。
+腐敗防止層は、Eric Evans が『Domain-Driven Design』で定義したパターンです。
 
 > Create an isolating layer to provide clients with functionality in terms of their own domain model. The layer talks to the other system through its existing interface, requiring little or no modification to the other system.
 >
 > — Eric Evans, _Domain-Driven Design: Tackling Complexity in the Heart of Software_（2003）
 
-### ACLが必要になる場面
+### ACL が必要になる場面
 
-以下のような状況で、ACLの導入を検討します。
+以下のような状況で、ACL の導入を検討します。
 
-- **外部APIのレスポンス構造が自分のドメインモデルと異なる**: たとえば外部の決済APIが返す`transaction`と、自分のドメインの`Payment`は異なる概念です
+- **外部 API のレスポンス構造が自分のドメインモデルと異なる**: たとえば外部の決済 API が返す`transaction`と、自分のドメインの`Payment`は異なる概念です
 - **レガシーシステムとの連携**: 古いシステムのデータ構造をそのまま使うと、レガシーの設計判断に引きずられます
-- **サードパーティサービスの仕様変更リスク**: APIのバージョンアップで構造体が変わっても、ACLの中だけで吸収したい場合
+- **サードパーティサービスの仕様変更リスク**: API のバージョンアップで構造体が変わっても、ACL の中だけで吸収したい場合
 
-### ACLの構造
+### ACL の構造
 
-Evansは『Domain-Driven Design』の中でACLの設計について次のように述べています。
+Evans は『Domain-Driven Design』の中で ACL の設計について次のように述べています。
 
 > One way of organizing the design of the ANTICORRUPTION LAYER is as a combination of FACADES, ADAPTERS (both from Gamma et al. 1995), and translators.
 >
 > — Eric Evans, _Domain-Driven Design: Tackling Complexity in the Heart of Software_（2003）
 
-ACLは主に3つの要素で構成されます。
+ACL は主に3つの要素で構成されます。
 
 ```mermaid
 graph LR
@@ -50,19 +50,19 @@ graph LR
 | --- | --- |
 | Translator | 外部のデータ構造をドメインモデルに変換します（またはその逆） |
 | Facade | 外部システムの複雑なインターフェースを簡素化します（通信プロトコルの詳細を隠蔽します） |
-| Adapter | ドメイン層のリクエストを受け取り、FacadeとTranslatorを使って外部システムと橋渡しします |
+| Adapter | ドメイン層のリクエストを受け取り、Facade と Translator を使って外部システムと橋渡しします |
 
-FacadeとAdapterはGoFの同名パターン（Gamma et al. 1995）に由来します。
+Facade と Adapter は GoF の同名パターン（Gamma et al. 1995）に由来します。
 
 ---
 
 ## Go での ACL 実装パターン
 
-ECサイトで外部の決済APIと連携する場面を例に、ACLの実装を見ていきます。
+EC サイトで外部の決済 API と連携する場面を例に、ACL の実装を見ていきます。
 
 ### ドメインモデルの定義
 
-まず、自分のドメインモデルを定義します。このモデルは外部APIの存在を知りません。
+まず、自分のドメインモデルを定義します。このモデルは外部 API の存在を知りません。
 
 ```go
 // domain/payment.go
@@ -104,9 +104,9 @@ type Order struct {
 }
 ```
 
-### 外部APIのレスポンス構造体
+### 外部 API のレスポンス構造体
 
-外部の決済APIは独自のデータ構造を返します。この構造体はACL内に閉じ込めます。
+外部の決済 API は独自のデータ構造を返します。この構造体は ACL 内に閉じ込めます。
 
 ```go
 // infra/payment/external/types.go
@@ -134,11 +134,11 @@ type ChargeResponse struct {
 }
 ```
 
-ドメインの`Payment`と外部の`ChargeResponse`は構造や命名規則が異なります。`State`の値（`authorized`、`captured`等）は外部APIの語彙であり、ドメインの`PaymentStatus`とは対応関係が必要です。
+ドメインの`Payment`と外部の`ChargeResponse`は構造や命名規則が異なります。`State`の値（`authorized`、`captured`等）は外部 API の語彙であり、ドメインの`PaymentStatus`とは対応関係が必要です。
 
 ### Translator の実装
 
-Translatorは外部のデータ構造をドメインモデルに変換する責務を持ちます。
+Translator は外部のデータ構造をドメインモデルに変換する責務を持ちます。
 
 ```go
 // infra/payment/translator.go
@@ -217,16 +217,16 @@ func (t *translator) toChargeRequest(orderID string, amount domain.Money) *exter
 }
 ```
 
-Translatorのポイントは以下の通りです。
+Translator のポイントは以下の通りです。
 
-- 外部APIの語彙（`authorized`、`captured`、`voided`等）をドメインの語彙（`pending`、`completed`、`cancelled`等）に翻訳します
+- 外部 API の語彙（`authorized`、`captured`、`voided`等）をドメインの語彙（`pending`、`completed`、`cancelled`等）に翻訳します
 - 日時フォーマットの変換など、技術的な差異もここで吸収します
 - 決済状態に応じて`PaidAt`の設定を制御します。まだ支払いが完了していない状態（`pending`や`cancelled`）では`nil`を返します
-- 未知の値に対してエラーを返すことで、外部API変更時に問題を早期検出します
+- 未知の値に対してエラーを返すことで、外部 API 変更時に問題を早期検出します
 
 ### Facade の実装
 
-FacadeはGoFのFacadeパターンに相当し、外部APIとの通信の詳細（HTTPメソッド、エンドポイント、認証ヘッダー、ステータスコード判定、ボディのデコード）を隠蔽します。Adapterから見ると「`ChargeRequest`を渡せば`ChargeResponse`が返ってくる」シンプルな窓口です。
+Facade は GoF の Facade パターンに相当し、外部 API との通信の詳細（HTTP メソッド、エンドポイント、認証ヘッダー、ステータスコード判定、ボディのデコード）を隠蔽します。Adapter から見ると「`ChargeRequest`を渡せば`ChargeResponse`が返ってくる」シンプルな窓口です。
 
 ```go
 // infra/payment/facade.go
@@ -298,7 +298,7 @@ func (f *paymentAPIFacade) Charge(ctx context.Context, req *external.ChargeReque
 
 ### Adapter の実装
 
-AdapterはFacadeとTranslatorを組み合わせて、ドメイン層のリクエストを外部システムとの通信に橋渡しします。UseCase層が定義するインターフェースを実装しますが、通信の詳細はFacadeに委譲するため、Adapter自体はシンプルな調整役に徹します。
+Adapter は Facade と Translator を組み合わせて、ドメイン層のリクエストを外部システムとの通信に橋渡しします。UseCase 層が定義するインターフェースを実装しますが、通信の詳細は Facade に委譲するため、Adapter 自体はシンプルな調整役に徹します。
 
 ```go
 // infra/payment/adapter.go
@@ -341,11 +341,11 @@ func (g *PaymentGateway) Charge(ctx context.Context, orderID string, amount doma
 }
 ```
 
-Adapterの`Charge`メソッドは、変換（Translator）→ 通信（Facade）→ 変換（Translator）という3ステップで処理を組み立てています。Adapter自体にはビジネスロジックや通信コードがなく、調整役に徹している点がポイントです。
+Adapter の`Charge`メソッドは、変換（Translator）→ 通信（Facade）→ 変換（Translator）という3ステップで処理を組み立てています。Adapter 自体にはビジネスロジックや通信コードがなく、調整役に徹している点がポイントです。
 
-### UseCaseからの利用
+### UseCase からの利用
 
-UseCase層はACLの存在を意識しません。ドメインモデルだけを使って処理を記述します。
+UseCase 層は ACL の存在を意識しません。ドメインモデルだけを使って処理を記述します。
 
 ```go
 // usecase/process_payment.go
@@ -399,11 +399,11 @@ func (uc *ProcessPaymentInteractor) Execute(ctx context.Context, orderID string)
 
 ## プロトコル別の実装例
 
-ACLのパターンはHTTP/RESTに限りません。gRPCやGraphQLでも同じ考え方が適用できます。
+ACL のパターンは HTTP/REST に限りません。gRPC や GraphQL でも同じ考え方が適用できます。
 
 ### gRPC の場合
 
-外部サービスがgRPCを提供している場合、Protocol Buffersで生成された型がACLの外部型になります。
+外部サービスが gRPC を提供している場合、Protocol Buffers で生成された型が ACL の外部型になります。
 
 ```go
 // infra/shipping/translator.go
@@ -512,37 +512,37 @@ func (s *ShippingTracker) Track(ctx context.Context, trackingID string) (*domain
 
 ### REST と gRPC の比較
 
-| 観点             | REST                          | gRPC                         |
-| ---------------- | ----------------------------- | ---------------------------- |
-| 外部型の定義場所 | ACL内の構造体（JSONタグ付き） | Protocol Buffersの生成コード |
-| Translatorの入力 | JSON構造体                    | Protocol Buffersメッセージ   |
-| Facadeの通信     | `net/http`                    | `google.golang.org/grpc`     |
-| Adapterの役割    | 同じ                          | 同じ                         |
-| ACLのパターン    | 同じ                          | 同じ                         |
+| 観点              | REST                            | gRPC                          |
+| ----------------- | ------------------------------- | ----------------------------- |
+| 外部型の定義場所  | ACL 内の構造体（JSON タグ付き） | Protocol Buffers の生成コード |
+| Translator の入力 | JSON 構造体                     | Protocol Buffers メッセージ   |
+| Facade の通信     | `net/http`                      | `google.golang.org/grpc`      |
+| Adapter の役割    | 同じ                            | 同じ                          |
+| ACL のパターン    | 同じ                            | 同じ                          |
 
-プロトコルが変わっても、ACLの構造（Facade + Adapter + Translator）は変わりません。変わるのはFacadeが扱う通信の詳細と外部型の定義方法だけです。
+プロトコルが変わっても、ACL の構造（Facade + Adapter + Translator）は変わりません。変わるのは Facade が扱う通信の詳細と外部型の定義方法だけです。
 
 ---
 
 ## ACL 導入時の判断基準
 
-ACLはすべての外部連携に必要なわけではありません。以下の基準で導入を判断します。
+ACL はすべての外部連携に必要なわけではありません。以下の基準で導入を判断します。
 
-| 条件                                             | ACLの要否                            |
+| 条件                                             | ACL の要否                           |
 | ------------------------------------------------ | ------------------------------------ |
-| 外部APIのモデルが自分のドメインと大きく異なる    | 必要です                             |
-| 外部APIの仕様変更頻度が高い                      | 必要です                             |
+| 外部 API のモデルが自分のドメインと大きく異なる  | 必要です                             |
+| 外部 API の仕様変更頻度が高い                    | 必要です                             |
 | レガシーシステムとの連携                         | 必要です                             |
 | チーム内の別サービス（共通のドメイン言語がある） | 不要な場合が多いです                 |
 | 標準的なライブラリ（DB、キャッシュ等）           | 不要です（モデルの乖離が小さいため） |
 
-ACLを過剰に導入すると、翻訳層のメンテナンスコストが増えます。外部のモデルとドメインモデルが近い場合は、FacadeやTranslatorを省いたシンプルな実装で十分なこともあります。
+ACL を過剰に導入すると、翻訳層のメンテナンスコストが増えます。外部のモデルとドメインモデルが近い場合は、Facade や Translator を省いたシンプルな実装で十分なこともあります。
 
 ---
 
 ## Translator のテスト
 
-ACLを導入する利点の1つは、Translatorを単体テストできることです。外部APIを呼び出さずに変換ロジックだけを検証できます。
+ACL を導入する利点の1つは、Translator を単体テストできることです。外部 API を呼び出さずに変換ロジックだけを検証できます。
 
 ```go
 // infra/payment/translator_test.go
@@ -634,27 +634,27 @@ func TestToChargeRequest(t *testing.T) {
 }
 ```
 
-Translatorをテストする際のポイントは以下の通りです。
+Translator をテストする際のポイントは以下の通りです。
 
-- 外部APIの各状態がドメインの正しい状態にマッピングされることを検証します
+- 外部 API の各状態がドメインの正しい状態にマッピングされることを検証します
 - 決済完了時のみ`PaidAt`が設定されることを確認します
-- 未知の状態でエラーが返ることを確認し、外部API変更時の検出を保証します
+- 未知の状態でエラーが返ることを確認し、外部 API 変更時の検出を保証します
 - リクエスト変換（`toChargeRequest`）のフィールドマッピングが正しいことを確認します
 
 ---
 
 ## まとめ
 
-| 観点             | 内容                                                                        |
-| ---------------- | --------------------------------------------------------------------------- |
-| ACLの目的        | 外部システムのモデルがドメインを「腐敗」させることを防ぎます                |
-| Facadeの責務     | 外部システムの複雑な通信インターフェースを簡素化します                      |
-| Adapterの責務    | ドメイン層のリクエストをFacadeとTranslatorで外部システムと橋渡しします      |
-| Translatorの責務 | 外部のデータ構造をドメインモデルに変換します                                |
-| Goでの実装       | 利用側でインターフェースを定義し、Facade + Adapter + Translatorで実装します |
-| プロトコル非依存 | REST / gRPC等、プロトコルが変わってもACLの構造は同じです                    |
+| 観点              | 内容                                                                         |
+| ----------------- | ---------------------------------------------------------------------------- |
+| ACL の目的        | 外部システムのモデルがドメインを「腐敗」させることを防ぎます                 |
+| Facade の責務     | 外部システムの複雑な通信インターフェースを簡素化します                       |
+| Adapter の責務    | ドメイン層のリクエストを Facade と Translator で外部システムと橋渡しします   |
+| Translator の責務 | 外部のデータ構造をドメインモデルに変換します                                 |
+| Go での実装       | 利用側でインターフェースを定義し、Facade + Adapter + Translator で実装します |
+| プロトコル非依存  | REST / gRPC 等、プロトコルが変わっても ACL の構造は同じです                  |
 
-ACLは、外部システムとの境界を明確にし、ドメインモデルの純粋性を守るための重要なパターンです。UseCase層がインターフェースを定義し、ACLがそれを実装する構造（依存性の逆転）により、UseCase層はACLの実装詳細を一切知らずに済みます。外部APIの仕様変更があっても、Translator内の変換ロジックを修正するだけでドメイン層への影響を防げます。
+ACL は、外部システムとの境界を明確にし、ドメインモデルの純粋性を守るための重要なパターンです。UseCase 層がインターフェースを定義し、ACL がそれを実装する構造（依存性の逆転）により、UseCase 層は ACL の実装詳細を一切知らずに済みます。外部 API の仕様変更があっても、Translator 内の変換ロジックを修正するだけでドメイン層への影響を防げます。
 
 ---
 
@@ -663,8 +663,8 @@ ACLは、外部システムとの境界を明確にし、ドメインモデル�
 | 内容 | 出典 |
 | --- | --- |
 | 腐敗防止層の原典 | Eric Evans, _Domain-Driven Design: Tackling Complexity in the Heart of Software_（2003） |
-| ACLの解説 | [Anti-Corruption Layer](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer)（Microsoft Azure Architecture Patterns） |
-| Goのインターフェース設計 | Go Wiki, [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces) |
-| DDD実践ガイド | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
-| GoFデザインパターン | Erich Gamma et al., _Design Patterns: Elements of Reusable Object-Oriented Software_（1995） |
-| gRPC Go実装 | [gRPC Go Quick Start](https://grpc.io/docs/languages/go/quickstart/) |
+| ACL の解説 | [Anti-Corruption Layer](https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer)（Microsoft Azure Architecture Patterns） |
+| Go のインターフェース設計 | Go Wiki, [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces) |
+| DDD 実践ガイド | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
+| GoF デザインパターン | Erich Gamma et al., _Design Patterns: Elements of Reusable Object-Oriented Software_（1995） |
+| gRPC Go 実装 | [gRPC Go Quick Start](https://grpc.io/docs/languages/go/quickstart/) |

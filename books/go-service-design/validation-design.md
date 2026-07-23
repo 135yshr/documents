@@ -6,23 +6,23 @@ title: "入力バリデーション設計〜3層での役割分担〜"
 
 :::message
 
-本章はDDD（ドメイン駆動設計）における入力バリデーションの設計指針をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に書名・章番号またはURLで記載しています。
+本章は DDD（ドメイン駆動設計）における入力バリデーションの設計指針をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に書名・章番号または URL で記載しています。
 
 :::
 
-「バリデーションはどこに書くべきか」——私の経験では、DDDを導入したプロジェクトで毎回議論になるテーマです。
+「バリデーションはどこに書くべきか」——私の経験では、DDD を導入したプロジェクトで毎回議論になるテーマです。
 
-私がGoでDDDを実践する中で経験したのは、バリデーションの配置が曖昧なまま開発を進めた結果、**同じチェックがController・UseCase・ドメインモデルに重複して散在する**状態でした。修正漏れによるバグが発生し、「どの層のバリデーションが正なのか」が分からなくなりました。
+私が Go で DDD を実践する中で経験したのは、バリデーションの配置が曖昧なまま開発を進めた結果、**同じチェックが Controller・UseCase・ドメインモデルに重複して散在する**状態でした。修正漏れによるバグが発生し、「どの層のバリデーションが正なのか」が分からなくなりました。
 
-この章では、バリデーションを**プレゼンテーション層・UseCase層・ドメイン層**の3層に分けて設計する方法と、各層が何を守るべきかを整理します。プレゼンテーション層は、本書の他の章で Handler層（interface層）と呼んでいる層に対応します。
+この章では、バリデーションを**プレゼンテーション層・UseCase 層・ドメイン層**の3層に分けて設計する方法と、各層が何を守るべきかを整理します。プレゼンテーション層は、本書の他の章で Handler 層（interface 層）と呼んでいる層に対応します。
 
 ---
 
 ## バリデーションの3層モデル
 
-バリデーションは、入力がシステムに到達してからドメインモデルに届くまでの間に、段階的にフィルタリングされるべきです。Vaughn Vernonは『Implementing Domain-Driven Design』（2013）Chapter 10で、集約が自身の不変条件を常に保護すべきだと述べています。
+バリデーションは、入力がシステムに到達してからドメインモデルに届くまでの間に、段階的にフィルタリングされるべきです。Vaughn Vernon は『Implementing Domain-Driven Design』（2013）Chapter 10で、集約が自身の不変条件を常に保護すべきだと述べています。
 
-バリデーションの層別配置はDDDコミュニティで広く議論されているテーマです。Vernon（IDDD, Chapter 5）は属性の自己検証・全体検証・遅延検証を区別しています。Khorikov（[Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/)）は入力バリデーションとドメイン不変条件を明確に分離しています。以下の3層モデルは、これらの先行議論と私のGoプロジェクトでの経験をもとに整理したものです。
+バリデーションの層別配置は DDD コミュニティで広く議論されているテーマです。Vernon（IDDD, Chapter 5）は属性の自己検証・全体検証・遅延検証を区別しています。Khorikov（[Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/)）は入力バリデーションとドメイン不変条件を明確に分離しています。以下の3層モデルは、これらの先行議論と私の Go プロジェクトでの経験をもとに整理したものです。
 
 ```mermaid
 flowchart TD
@@ -40,8 +40,8 @@ flowchart TD
 
 | 層                   | 責務                     | 例                                         |
 | -------------------- | ------------------------ | ------------------------------------------ |
-| プレゼンテーション層 | 入力形式・型の検証       | JSON構造、必須フィールド、文字列長         |
-| UseCase層            | ユースケース固有の整合性 | 重複チェック、権限確認、外部状態の参照     |
+| プレゼンテーション層 | 入力形式・型の検証       | JSON 構造、必須フィールド、文字列長        |
+| UseCase 層           | ユースケース固有の整合性 | 重複チェック、権限確認、外部状態の参照     |
 | ドメイン層           | 不変条件の保護           | 値の範囲、状態遷移の妥当性、ビジネスルール |
 
 ---
@@ -97,18 +97,18 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 プレゼンテーション層でチェックすべき項目は以下の通りです。
 
-- JSONやフォームデータのパース可否
+- JSON やフォームデータのパース可否
 - 必須フィールドの存在
 - 文字列長・配列長の上限
-- 型の妥当性（UUID形式、メールアドレス形式など）
+- 型の妥当性（UUID 形式、メールアドレス形式など）
 
-この層のバリデーションは、不正な形式のデータを早期に弾くことで後続の処理に到達するデータの品質を保証します。ただし、SQLインジェクションやXSSのような脅威に対しては入力バリデーションだけでは対策になりません（詳しくは後述の「セキュリティ観点でのバリデーション」を参照してください）。入力バリデーションの役割は、**リクエストサイズの制限や形式不正の排除**に限定されます。
+この層のバリデーションは、不正な形式のデータを早期に弾くことで後続の処理に到達するデータの品質を保証します。ただし、SQL インジェクションや XSS のような脅威に対しては入力バリデーションだけでは対策になりません（詳しくは後述の「セキュリティ観点でのバリデーション」を参照してください）。入力バリデーションの役割は、**リクエストサイズの制限や形式不正の排除**に限定されます。
 
 ---
 
-## UseCase層のバリデーション
+## UseCase 層のバリデーション
 
-UseCase層では、**ユースケース固有の整合性**を検証します。ドメインモデルの不変条件とは異なり、外部状態の参照や複数集約にまたがるチェックがここに含まれます。
+UseCase 層では、**ユースケース固有の整合性**を検証します。ドメインモデルの不変条件とは異なり、外部状態の参照や複数集約にまたがるチェックがここに含まれます。
 
 ```go
 // usecase/create_task_interactor.go
@@ -167,15 +167,15 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 }
 ```
 
-`ExistsByTitle`は早期フィードバック用のチェックです。並行リクエストでは競合の可能性があるため、最終的な防衛線はDB側の一意制約です。
+`ExistsByTitle`は早期フィードバック用のチェックです。並行リクエストでは競合の可能性があるため、最終的な防衛線は DB 側の一意制約です。
 
 ```sql
 ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
 ```
 
-Save時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義された sentinel error `model.ErrDuplicateTitle` を返します。第7章「エラーハンドリング設計」で述べたとおり、Repository層はドメインのsentinel errorを返し、インフラ固有のエラーはアダプター内で変換します。
+Save 時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義された sentinel error `model.ErrDuplicateTitle` を返します。第7章「エラーハンドリング設計」で述べたとおり、Repository 層はドメインの sentinel error を返し、インフラ固有のエラーはアダプター内で変換します。
 
-Cockburnの[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これはdriven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースがdriven Port、`infrastructure/postgres`のDB実装がdriven Adapterにあたります。一方、REST handlerはdriving side（外部がアプリケーションを駆動する側）のAdapterです。driven AdapterがDBエラーを吸収し、driven Portを通じてドメイン側が理解できるエラーを返します。
+Cockburn の[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これは driven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースが driven Port、`infrastructure/postgres`の DB 実装が driven Adapter にあたります。一方、REST handler は driving side（外部がアプリケーションを駆動する側）の Adapter です。driven Adapter が DB エラーを吸収し、driven Port を通じてドメイン側が理解できるエラーを返します。
 
 ```go
 // domain/model/errors.go
@@ -183,14 +183,14 @@ Cockburnの[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-archi
 var ErrDuplicateTitle = errors.New("task title already exists in this project")
 ```
 
-UseCase層でチェックすべき項目は以下の通りです。
+UseCase 層でチェックすべき項目は以下の通りです。
 
 - 参照先エンティティの存在確認（担当者、プロジェクトなど）
 - 一意性制約のチェック（タイトルの重複など）
 - 現在のユーザーに対する権限チェック
 - 複数集約にまたがる整合性チェック
 
-**重要なのは、これらのチェックがドメインモデルの外に置かれる理由です。** 存在確認や重複チェックはリポジトリへの問い合わせが必要です。Vernon（IDDD, Chapter 10）は集約の設計ルールとして「他の集約はIDで参照する」「集約の境界内でトランザクション整合性を保つ」ことを挙げています。集約内にリポジトリへの直接的な依存を持ち込むと、この境界が曖昧になるため、リポジトリを使うチェックは集約の外に配置します。
+**重要なのは、これらのチェックがドメインモデルの外に置かれる理由です。** 存在確認や重複チェックはリポジトリへの問い合わせが必要です。Vernon（IDDD, Chapter 10）は集約の設計ルールとして「他の集約は ID で参照する」「集約の境界内でトランザクション整合性を保つ」ことを挙げています。集約内にリポジトリへの直接的な依存を持ち込むと、この境界が曖昧になるため、リポジトリを使うチェックは集約の外に配置します。
 
 なお、「同一プロジェクト内のタイトル一意性」のようなルールはドメインサービスとして表現する選択肢もあります。ドメインサービスであればリポジトリインターフェースを受け取れるため、技術的にはドメイン層に置くことも可能です。本章ではユースケース層に配置していますが、これはこのルールが**特定のユースケース（タスク作成）でのみ検証される**ためです。タスク名の変更時にも同じチェックが必要になった場合は、ドメインサービスへの移動を検討すべきです。
 
@@ -198,7 +198,7 @@ UseCase層でチェックすべき項目は以下の通りです。
 
 ## ドメイン層のバリデーション：不変条件の保護
 
-ドメイン層のバリデーションは、**モデルの不変条件（invariants）を保護する**ために存在します。Vaughn Vernonは『Implementing Domain-Driven Design』の中で、集約が常にトランザクション整合性を保つべきだと述べています。
+ドメイン層のバリデーションは、**モデルの不変条件（invariants）を保護する**ために存在します。Vaughn Vernon は『Implementing Domain-Driven Design』の中で、集約が常にトランザクション整合性を保つべきだと述べています。
 
 ### 値オブジェクトによるバリデーション
 
@@ -387,24 +387,24 @@ flowchart LR
 
 「プレゼンテーション層で全部チェックすればよいのでは」という疑問はもっともです。多層防御が必要な理由は以下の通りです。
 
-- **入口は1つに限りません**。REST API、gRPC、CLIツール、バッチ処理など、ドメインモデルへの入口は複数存在します。プレゼンテーション層のバリデーションに依存すると、新しい入口を追加するたびにバリデーションを再実装する必要があります
+- **入口は1つに限りません**。REST API、gRPC、CLI ツール、バッチ処理など、ドメインモデルへの入口は複数存在します。プレゼンテーション層のバリデーションに依存すると、新しい入口を追加するたびにバリデーションを再実装する必要があります
 - **ドメインモデルは自分自身を守る必要があります**。前述のとおり、値オブジェクトとエンティティのコンストラクタが不変条件を保護する最終防衛線です
-- **層ごとに関心事が異なります**。「JSONのパースに失敗した」と「ビジネスルール上許可されない操作だ」では、エラーの性質やレスポンスコードが異なります
+- **層ごとに関心事が異なります**。「JSON のパースに失敗した」と「ビジネスルール上許可されない操作だ」では、エラーの性質やレスポンスコードが異なります
 
 ### セキュリティ観点でのバリデーション
 
-セキュリティの観点では、OWASPのガイドラインおよび一般的なセキュリティプラクティスをもとに、各層での対策を整理します。
+セキュリティの観点では、OWASP のガイドラインおよび一般的なセキュリティプラクティスをもとに、各層での対策を整理します。
 
 | 脅威 | 対策層 | 具体的な対策 |
 | --- | --- | --- |
-| SQLインジェクション | インフラ | プリペアドステートメント |
-| XSS | プレゼンテーション（＋インフラ） | 出力時のエスケープ（主対策）＋CSPヘッダ（補助） |
+| SQL インジェクション | インフラ | プリペアドステートメント |
+| XSS | プレゼンテーション（＋インフラ） | 出力時のエスケープ（主対策）＋CSP ヘッダ（補助） |
 | 不正な状態遷移 | ドメイン | 状態遷移マップによる制御 |
 | 権限昇格 | アプリケーション | ユースケースでの権限チェック |
-| CSRF | インフラ（＋プレゼンテーション） | CSRFトークン検証またはAPIトークン認証＋SameSite Cookie（[OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)） |
+| CSRF | インフラ（＋プレゼンテーション） | CSRF トークン検証または API トークン認証＋SameSite Cookie（[OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)） |
 | 大量データ送信 | プレゼンテーション | リクエストサイズ制限＋レートリミット |
 
-SQLインジェクションの主対策はプリペアドステートメント（パラメータ化クエリ）です。OWASPは入力バリデーションを補助的な防御（secondary defense）と位置づけていますが、主対策の代替にはなりません。XSSについても、OWASPの[XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html)は**出力時**のエスケープを主対策としています。出力エスケープはテンプレートレンダリング時の処理であり、Goの`html/template`パッケージのように**プレゼンテーション層**が担当します。CSPヘッダは補助的な多層防御としてインフラ層（ミドルウェア）が設定します。いずれも入力バリデーションの文脈とは区別して理解する必要があります。
+SQL インジェクションの主対策はプリペアドステートメント（パラメータ化クエリ）です。OWASP は入力バリデーションを補助的な防御（secondary defense）と位置づけていますが、主対策の代替にはなりません。XSS についても、OWASP の[XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html)は**出力時**のエスケープを主対策としています。出力エスケープはテンプレートレンダリング時の処理であり、Go の`html/template`パッケージのように**プレゼンテーション層**が担当します。CSP ヘッダは補助的な多層防御としてインフラ層（ミドルウェア）が設定します。いずれも入力バリデーションの文脈とは区別して理解する必要があります。
 
 Go のミドルウェアでセキュリティ関連のバリデーションを共通化する例です。
 
@@ -442,9 +442,9 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 ## バリデーションエラーの設計
 
-各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第7章「エラーハンドリング設計」ではsentinel errorと`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
+各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第7章「エラーハンドリング設計」では sentinel error と`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
 
-ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のようなHTTPリクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDDの文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martinの[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
+ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のような HTTP リクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDD の文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martin の[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
 
 ```go
 // domain/model/rule_violation.go
@@ -474,7 +474,7 @@ func (rv RuleViolations) Error() string {
 }
 ```
 
-プレゼンテーション層では、ドメイン層の`RuleViolation`をAPIレスポンス用の構造に変換します。「どのルールに違反したか」から「どのフィールドに問題があるか」へのマッピングはプレゼンテーション層の責務です。
+プレゼンテーション層では、ドメイン層の`RuleViolation`を API レスポンス用の構造に変換します。「どのルールに違反したか」から「どのフィールドに問題があるか」へのマッピングはプレゼンテーション層の責務です。
 
 ```go
 // interface/rest/handler/error_response.go
@@ -520,15 +520,15 @@ func respondRuleViolations(w http.ResponseWriter, violations model.RuleViolation
 
 ## まとめ
 
-DDDにおけるバリデーション設計のポイントを整理します。
+DDD におけるバリデーション設計のポイントを整理します。
 
 | 層 | 守るもの | 設計方針 |
 | --- | --- | --- |
 | プレゼンテーション層 | 入力形式 | 構造体タグやミドルウェアで宣言的に記述する |
-| UseCase層 | ユースケースの整合性 | リポジトリへの問い合わせで外部状態を検証する |
+| UseCase 層 | ユースケースの整合性 | リポジトリへの問い合わせで外部状態を検証する |
 | ドメイン層 | 不変条件 | 値オブジェクトとエンティティのコンストラクタで保護する |
 
-最も重要な原則は、Vladimir Khorikovが[Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/)と呼ぶ考え方です。ドメインモデルが自身の不変条件を守り、プレゼンテーション層とUseCase層がその外側で多層防御を構成します。
+最も重要な原則は、Vladimir Khorikov が[Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/)と呼ぶ考え方です。ドメインモデルが自身の不変条件を守り、プレゼンテーション層と UseCase 層がその外側で多層防御を構成します。
 
 ---
 
@@ -544,8 +544,8 @@ DDDにおけるバリデーション設計のポイントを整理します。
 | 入力バリデーションとドメイン不変条件の分離 | Vladimir Khorikov, [Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/) |
 | ドメインモデル層でのバリデーション設計 | Microsoft, [Domain model layer validations](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/domain-model-layer-validations) |
 | 入力バリデーションとセキュリティ | OWASP, [Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html) |
-| XSS対策の主対策と補助的防御 | OWASP, [XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html) |
-| CSRF対策 | OWASP, [CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) |
+| XSS 対策の主対策と補助的防御 | OWASP, [XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Scripting_Prevention_Cheat_Sheet.html) |
+| CSRF 対策 | OWASP, [CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) |
 | クリーンアーキテクチャの依存性ルール | Robert C. Martin, [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) |
 | Hexagonal Architecture（Ports and Adapters） | Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) |
 | Go のバリデーションライブラリ | go-playground/validator, [GitHub](https://github.com/go-playground/validator) |

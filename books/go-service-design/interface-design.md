@@ -1,28 +1,28 @@
 ---
-title: "Goのinterface設計〜利用側で定義し、小さく保つ〜"
+title: "Go の interface 設計〜利用側で定義し、小さく保つ〜"
 ---
 
 ## はじめに
 
 :::message
 
-本章は私がGoでクリーンアーキテクチャを採用したプロジェクトを運用する中で得た気づきをまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+本章は私が Go でクリーンアーキテクチャを採用したプロジェクトを運用する中で得た気づきをまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
 
 :::
 
-Goでクリーンアーキテクチャを導入したとき、私が最初にぶつかった壁は「interfaceが多すぎる」という問題でした。
+Go でクリーンアーキテクチャを導入したとき、私が最初にぶつかった壁は「interface が多すぎる」という問題でした。
 
-Repository、InputPort、OutputPort、UseCase、Presenter…レイヤーごとにinterfaceと実装のペアが増殖しました。1つの機能を追加するのに何ファイルも触る状態でした。
+Repository、InputPort、OutputPort、UseCase、Presenter…レイヤーごとに interface と実装のペアが増殖しました。1つの機能を追加するのに何ファイルも触る状態でした。
 
-しかし運用を続ける中で、**interfaceの数そのものは問題ではない**と分かりました。本当の問題は**1つのinterfaceが太すぎること**と、**Goの言語特性を活かせていないこと**でした。
+しかし運用を続ける中で、**interface の数そのものは問題ではない**と分かりました。本当の問題は**1つの interface が太すぎること**と、**Go の言語特性を活かせていないこと**でした。
 
-この章では、教科書通りに作った設計を**Goの思想で見直すプロセス**を共有します。
+この章では、教科書通りに作った設計を**Go の思想で見直すプロセス**を共有します。
 
 ---
 
 ## 教科書通りに作った設計
 
-最初に私が採用したのは、Ports & Adaptersパターンです。interfaceの種類と配置場所を明確に分けました。
+最初に私が採用したのは、Ports & Adapters パターンです。interface の種類と配置場所を明確に分けました。
 
 ```text
 internal/{module}/
@@ -42,7 +42,7 @@ internal/{module}/
     └── postgres/        # Repository実装
 ```
 
-各interfaceは1〜2メソッドに絞り、ISP（インターフェース分離の原則）も意識しました。たとえばタスク管理システムの分析機能では、次のようにInput Portを分離しました。
+各 interface は1〜2メソッドに絞り、ISP（インターフェース分離の原則）も意識しました。たとえばタスク管理システムの分析機能では、次のように Input Port を分離しました。
 
 ```go
 // usecase/port/input/task_input_port.go
@@ -60,33 +60,33 @@ type BatchAnalyzeInputPort interface {
 }
 ```
 
-この設計は**動きます**。テスタビリティも高く、レイヤー間の依存方向も正しく保たれています。しかし運用を続ける中で、**Goの思想とのズレ**に気づきました。
+この設計は**動きます**。テスタビリティも高く、レイヤー間の依存方向も正しく保たれています。しかし運用を続ける中で、**Go の思想とのズレ**に気づきました。
 
 ---
 
-## Goの思想との3つのズレ
+## Go の思想との3つのズレ
 
-### ズレ1：interfaceを「提供側」が定義している
+### ズレ1：interface を「提供側」が定義している
 
-Goの公式 Wiki にはこう書かれています。
+Go の公式 Wiki にはこう書かれています。
 
 > Go interfaces generally belong in the package that uses values of the interface type, not the package that implements those values.
 >
 > — [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces)
 
-私の設計では、`usecase/port/input/`にinterfaceを定義し、それをHandler層が参照していました。つまり**interfaceを提供側が定義する**Java/C#的なアプローチです。
+私の設計では、`usecase/port/input/`に interface を定義し、それを Handler 層が参照していました。つまり**interface を提供側が定義する**Java/C#的なアプローチです。
 
-Goでは**利用側がinterfaceを定義する**のが慣習です。`io.Reader`はデータを読む側のパッケージで定義されており、`os.File`はその存在を知りません。
+Go では**利用側が interface を定義する**のが慣習です。`io.Reader`はデータを読む側のパッケージで定義されており、`os.File`はその存在を知りません。
 
-### ズレ2：interfaceが「大きすぎる」
+### ズレ2：interface が「大きすぎる」
 
-Goの作者 Rob Pike はこう述べています。
+Go の作者 Rob Pike はこう述べています。
 
 > The bigger the interface, the weaker the abstraction.
 >
 > — [Go Proverbs](https://go-proverbs.github.io/)
 
-Go標準ライブラリのinterfaceはほとんどが1〜2メソッドです。
+Go 標準ライブラリの interface はほとんどが1〜2メソッドです。
 
 | interface        | メソッド数 |
 | ---------------- | ---------- |
@@ -97,9 +97,9 @@ Go標準ライブラリのinterfaceはほとんどが1〜2メソッドです。
 | `http.Handler`   | 1          |
 | `sort.Interface` | 3          |
 
-私のRepository interfaceは5〜8メソッドありました。Goの基準では「太い」interfaceでした。
+私の Repository interface は5〜8メソッドありました。Go の基準では「太い」interface でした。
 
-### ズレ3：「将来のため」のinterfaceが残っている
+### ズレ3：「将来のため」の interface が残っている
 
 ```go
 // ❌ 実装が1つしかないInput Port
@@ -113,7 +113,7 @@ type getTaskResultsInteractor struct {
 }
 ```
 
-Goコミュニティではこれを**Preemptive Interface（先回りinterface）**と呼び、アンチパターンとされています。
+Go コミュニティではこれを**Preemptive Interface（先回り interface）**と呼び、アンチパターンとされています。
 
 > A great rule of thumb for Go is accept interfaces, return structs.
 >
@@ -121,11 +121,11 @@ Goコミュニティではこれを**Preemptive Interface（先回りinterface�
 
 ---
 
-## 処方箋1：Input Portを廃止し、利用側でinterfaceを定義する
+## 処方箋1：Input Port を廃止し、利用側で interface を定義する
 
-最も効果が大きかった改善です。`usecase/port/input/`ディレクトリを廃止し、interfaceを**利用側**で定義するようにしました。このパターンがDIP（依存性逆転の原則）とどう結びつくかは第2章「依存性ルール」で解説しています。
+最も効果が大きかった改善です。`usecase/port/input/`ディレクトリを廃止し、interface を**利用側**で定義するようにしました。このパターンが DIP（依存性逆転の原則）とどう結びつくかは第2章「依存性ルール」で解説しています。
 
-### Before：提供側でInput Portを定義
+### Before：提供側で Input Port を定義
 
 ```go
 // usecase/port/input/task_input_port.go
@@ -139,7 +139,7 @@ type TaskHandler struct {
 }
 ```
 
-### After：利用側でinterfaceを定義
+### After：利用側で interface を定義
 
 ```go
 // usecase/analyze_task_interactor.go
@@ -166,11 +166,11 @@ type TaskHandler struct {
 }
 ```
 
-`AnalyzeTaskInteractor`は`taskAnalyzer` interfaceの存在を知りません。Goのimplicit interface（暗黙的なinterface満足）により、自動的にinterfaceを満たします。
+`AnalyzeTaskInteractor`は`taskAnalyzer` interface の存在を知りません。Go の implicit interface（暗黙的な interface 満足）により、自動的に interface を満たします。
 
-### Interactor同士の組み合わせも同様
+### Interactor 同士の組み合わせも同様
 
-複合的なInteractorが他のInteractorを使う場合も、利用側でinterfaceを定義します。
+複合的な Interactor が他の Interactor を使う場合も、利用側で interface を定義します。
 
 ```go
 // usecase/batch_analyze_interactor.go
@@ -186,9 +186,9 @@ type BatchAnalyzeInteractor struct {
 
 ---
 
-## 処方箋2：Output Portは残す（ただし利用側で定義する選択肢もある）
+## 処方箋2：Output Port は残す（ただし利用側で定義する選択肢もある）
 
-外部サービス（LLM、メッセージキュー、認証基盤等）との連携を抽象化するOutput Portには、**残す価値があります**。
+外部サービス（LLM、メッセージキュー、認証基盤等）との連携を抽象化する Output Port には、**残す価値があります**。
 
 ```go
 // usecase/port/output/classifier_port.go
@@ -197,9 +197,9 @@ type TaskClassifierPort interface {
 }
 ```
 
-Output Portを残す理由は、**実装が実際に差し替わる**からです。私のプロジェクトでは、分析ロジックを「キーワードマッチング → 機械学習ベースの分類」に段階的に移行しました。Output Portが分離されていたため、新しい実装を追加するだけで移行できました。
+Output Port を残す理由は、**実装が実際に差し替わる**からです。私のプロジェクトでは、分析ロジックを「キーワードマッチング → 機械学習ベースの分類」に段階的に移行しました。Output Port が分離されていたため、新しい実装を追加するだけで移行できました。
 
-ただし、Goの思想に厳密に従うなら、Output Port も利用側（Interactor）で定義する方法があります。
+ただし、Go の思想に厳密に従うなら、Output Port も利用側（Interactor）で定義する方法があります。
 
 ```go
 // usecase/analyze_task_interactor.go
@@ -213,21 +213,21 @@ type AnalyzeTaskInteractor struct {
 }
 ```
 
-**複数のInteractorが同じ外部サービスを使う場合**は、共有interfaceとしてOutput Portを1箇所で定義する方が重複を避けられます。これは実用上のトレードオフです。
+**複数の Interactor が同じ外部サービスを使う場合**は、共有 interface として Output Port を1箇所で定義する方が重複を避けられます。これは実用上のトレードオフです。
 
 ### 判断基準
 
-| 条件                            | 方針                      |
-| ------------------------------- | ------------------------- |
-| 1つのInteractorからしか使わない | 利用側で定義する          |
-| 複数のInteractorから共有する    | Output Portとして定義する |
-| 実装の差し替え実績・予定がない  | interfaceを作らない       |
+| 条件                              | 方針                       |
+| --------------------------------- | -------------------------- |
+| 1つの Interactor からしか使わない | 利用側で定義する           |
+| 複数の Interactor から共有する    | Output Port として定義する |
+| 実装の差し替え実績・予定がない    | interface を作らない       |
 
 ---
 
-## 処方箋3：Repositoryを Reader / Writer に分離する
+## 処方箋3：Repository を Reader / Writer に分離する
 
-Repository interfaceは`domain/repository/`に配置していました。メソッド数は5〜8個です。
+Repository interface は`domain/repository/`に配置していました。メソッド数は5〜8個です。
 
 ```go
 // ❌ 太いRepository interface
@@ -241,7 +241,7 @@ type TaskResultRepository interface {
 }
 ```
 
-Goの基準では太すぎます。そこで**Reader / Writer に分離**しました。
+Go の基準では太すぎます。そこで**Reader / Writer に分離**しました。
 
 ```go
 // domain/repository/task_result_repository.go
@@ -259,7 +259,7 @@ type TaskResultWriter interface {
 }
 ```
 
-読み取り専用のInteractorは`TaskResultReader`だけに依存し、書き込み処理を知る必要がなくなります。
+読み取り専用の Interactor は`TaskResultReader`だけに依存し、書き込み処理を知る必要がなくなります。
 
 ```go
 // usecase/get_statistics_interactor.go
@@ -268,7 +268,7 @@ type GetStatisticsInteractor struct {
 }
 ```
 
-infrastructure層の実装は両方のinterfaceを暗黙的に満たします。
+infrastructure 層の実装は両方の interface を暗黙的に満たします。
 
 ```go
 // infrastructure/postgres/task_result_repository.go
@@ -276,7 +276,7 @@ var _ repository.TaskResultReader = (*taskResultRepository)(nil)
 var _ repository.TaskResultWriter = (*taskResultRepository)(nil)
 ```
 
-`var _ Interface = (*Impl)(nil)` はGoの定番パターンです。interfaceの変更時に、実装漏れをコンパイルエラーで検出できます。
+`var _ Interface = (*Impl)(nil)` は Go の定番パターンです。interface の変更時に、実装漏れをコンパイルエラーで検出できます。
 
 ---
 
@@ -319,17 +319,17 @@ internal/{module}/
     └── postgres/
 ```
 
-`usecase/port/input/` がなくなり、interfaceの配置場所が減りました。
+`usecase/port/input/` がなくなり、interface の配置場所が減りました。
 
 ---
 
 ## よくある疑問と私の考え
 
-### 「Input Portがないと、依存の注入はどうするのか」
+### 「Input Port がないと、依存の注入はどうするのか」
 
-これは私も最初に悩んだ点です。結論としては、手動DI・DIコンテナのどちらでも問題ありません。
+これは私も最初に悩んだ点です。結論としては、手動 DI・DI コンテナのどちらでも問題ありません。
 
-手動DIの場合、Interactorのstructをそのまま渡すだけです。
+手動 DI の場合、Interactor の struct をそのまま渡すだけです。
 
 ```go
 // 手動DI：main.go や provider.go での初期化
@@ -337,7 +337,7 @@ interactor := usecase.NewAnalyzeTaskInteractor(repo, classifier)
 handler := handler.NewTaskHandler(interactor) // structを渡す
 ```
 
-DIコンテナ（`uber-go/dig`等）を使っている場合も、structを直接登録する方式へ切り替えるだけです。
+DI コンテナ（`uber-go/dig`等）を使っている場合も、struct を直接登録する方式へ切り替えるだけです。
 
 ```go
 // Before: interfaceとして登録
@@ -347,11 +347,11 @@ c.Provide(usecase.NewAnalyzeTaskInteractor, dig.As(new(input.AnalyzeTaskInputPor
 c.Provide(usecase.NewAnalyzeTaskInteractor)
 ```
 
-どちらの場合も、Handler側でinterfaceを定義しているため、structを渡しても暗黙的にinterfaceを満たします。これがGoのimplicit interfaceの強みです。
+どちらの場合も、Handler 側で interface を定義しているため、struct を渡しても暗黙的に interface を満たします。これが Go の implicit interface の強みです。
 
-### 「interfaceファイルが各Handlerに散らばって管理しづらくないか」
+### 「interface ファイルが各 Handler に散らばって管理しづらくないか」
 
-もっともな懸念です。ただ、各Handlerファイルの先頭にprivate interfaceとして定義するため、**interfaceと利用箇所が常に隣接**します。実際に運用してみると、「このinterfaceはどこで使われているか」を探す手間はほとんど発生しませんでした。
+もっともな懸念です。ただ、各 Handler ファイルの先頭に private interface として定義するため、**interface と利用箇所が常に隣接**します。実際に運用してみると、「この interface はどこで使われているか」を探す手間はほとんど発生しませんでした。
 
 ```go
 // interface/rest/handler/task_handler.go
@@ -371,22 +371,22 @@ type TaskHandler struct {
 
 ### 「小さなプロジェクトでもこの構成が必要か」
 
-正直なところ、CRUD中心のアプリケーションなら、ここまでの分離は必要ないと感じています。Repository interface + structのUseCaseで十分です。この構成が活きるのは、**外部サービスとの連携が多い**か、**複数の戦略を切り替える必要がある**プロジェクトです。
+正直なところ、CRUD 中心のアプリケーションなら、ここまでの分離は必要ないと感じています。Repository interface + struct の UseCase で十分です。この構成が活きるのは、**外部サービスとの連携が多い**か、**複数の戦略を切り替える必要がある**プロジェクトです。
 
 ---
 
 ## まとめ
 
-| 処方箋 | 内容 | Goの根拠 |
+| 処方箋 | 内容 | Go の根拠 |
 | --- | --- | --- |
-| 1. Input Port廃止 | 利用側でinterfaceを定義する | "Accept interfaces, return structs" |
-| 2. Output Port精査 | 共有interfaceのみ残す | 実装差し替えの実績がある場合のみ |
-| 3. Repository分離 | Reader / Writerに分ける | "The bigger the interface, the weaker the abstraction" |
-| 4. ディレクトリ整理 | port/input/ を廃止する | interfaceは利用側のパッケージに属する |
+| 1. Input Port 廃止 | 利用側で interface を定義する | "Accept interfaces, return structs" |
+| 2. Output Port 精査 | 共有 interface のみ残す | 実装差し替えの実績がある場合のみ |
+| 3. Repository 分離 | Reader / Writer に分ける | "The bigger the interface, the weaker the abstraction" |
+| 4. ディレクトリ整理 | port/input/ を廃止する | interface は利用側のパッケージに属する |
 
-教科書通りのPorts & Adaptersを導入した当初は「きれいに分離できた」と満足していました。しかしGoの思想を学ぶ中で、**interfaceの数を減らすのではなく、各interfaceを正しい場所に置く**ことが本質だと気づきました。
+教科書通りの Ports & Adapters を導入した当初は「きれいに分離できた」と満足していました。しかし Go の思想を学ぶ中で、**interface の数を減らすのではなく、各 interface を正しい場所に置く**ことが本質だと気づきました。
 
-Goのimplicit interfaceは、「提供側がinterfaceを定義しなくても依存性逆転ができる」という強力な仕組みです。この仕組みを活かすことで、interfaceの爆発を防ぎつつ、テスタビリティと保守性を両立できます。
+Go の implicit interface は、「提供側が interface を定義しなくても依存性逆転ができる」という強力な仕組みです。この仕組みを活かすことで、interface の爆発を防ぎつつ、テスタビリティと保守性を両立できます。
 
 ---
 
@@ -397,6 +397,6 @@ Goのimplicit interfaceは、「提供側がinterfaceを定義しなくても依
 | クリーンアーキテクチャ原典 | Robert C. Martin, _Clean Architecture_（2017） |
 | Ports & Adapters | Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) |
 | Go Proverbs | Rob Pike, [Go Proverbs](https://go-proverbs.github.io/) |
-| Goのinterface設計原則 | Jack Lindamood, [Preemptive Interface Anti-Pattern in Go](https://medium.com/@cep21/preemptive-interface-anti-pattern-in-go-54c18ac0668a) |
-| Go公式 interface配置ガイド | Go Wiki, [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces) |
+| Go の interface 設計原則 | Jack Lindamood, [Preemptive Interface Anti-Pattern in Go](https://medium.com/@cep21/preemptive-interface-anti-pattern-in-go-54c18ac0668a) |
+| Go 公式 interface 配置ガイド | Go Wiki, [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces) |
 | ISP | Robert C. Martin, _Agile Software Development, Principles, Patterns, and Practices_（2002） |

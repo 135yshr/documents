@@ -4,7 +4,7 @@ title: "依存性ルール〜同心円図の正しい読み方〜"
 
 ## はじめに
 
-クリーンアーキテクチャといえば、あの**同心円図**を思い浮かべる方が多いのではないでしょうか。Entities、Use Cases、Interface Adapters、Frameworks & Driversの4層が同心円状に配置された図です。
+クリーンアーキテクチャといえば、あの**同心円図**を思い浮かべる方が多いのではないでしょうか。Entities、Use Cases、Interface Adapters、Frameworks & Drivers の4層が同心円状に配置された図です。
 
 ![クリーンアーキテクチャの同心円図。4つの層が同心円状に配置され、依存の矢印が外側から内側へ向かっている](/images/808fbfe6b7db3d/clean-architecture-circles.png)
 
@@ -79,8 +79,8 @@ internal/
 
 たとえば、外側のレイヤーにも以下のような設計上の関心事があります。
 
-- infrastructure層のRepository実装で、SQLの組み立てとエラーハンドリングが1つの関数に混在していれば、テストや修正が困難になります
-- 外部APIクライアントにおいて、リトライやタイムアウト制御が適切に分離されていなければ、障害時の挙動が把握しにくくなります
+- infrastructure 層の Repository 実装で、SQL の組み立てとエラーハンドリングが1つの関数に混在していれば、テストや修正が困難になります
+- 外部 API クライアントにおいて、リトライやタイムアウト制御が適切に分離されていなければ、障害時の挙動が把握しにくくなります
 - ハンドラ層において、バリデーションとユースケース呼び出しが混在していれば、テストの範囲が曖昧になります
 
 外側のレイヤーも適切に設計することで、全体として保守性の高いシステムになります。
@@ -89,15 +89,15 @@ internal/
 
 ## 依存性逆転の原則（DIP）こそが本質
 
-同心円図で本当に伝えたいことは、**依存性の矢印がすべて内側を向いている**という点です。これを支えているのが、SOLIDの「D」にあたる**依存性逆転の原則（Dependency Inversion Principle: DIP）**です。
+同心円図で本当に伝えたいことは、**依存性の矢印がすべて内側を向いている**という点です。これを支えているのが、SOLID の「D」にあたる**依存性逆転の原則（Dependency Inversion Principle: DIP）**です。
 
 > A. High-level modules should not depend on low-level modules. Both should depend on abstractions. B. Abstractions should not depend on details. Details should depend on abstractions.
 >
 > — Robert C. Martin, _Agile Software Development_（2002）
 
-### DIPが解決する問題
+### DIP が解決する問題
 
-DIPがない世界では、usecase層がinfrastructure層の具体的な実装に直接依存します。
+DIP がない世界では、usecase 層が infrastructure 層の具体的な実装に直接依存します。
 
 ```mermaid
 graph LR
@@ -106,9 +106,9 @@ graph LR
     style B fill:#e8edf2,stroke:#8c9bab,color:#1a3a5c
 ```
 
-この状態では、PostgreSQLからMongoDBに変更するとき、usecase層のコードまで修正が必要になります。ビジネスロジックが技術的な選択に振り回されてしまいます。
+この状態では、PostgreSQL から MongoDB に変更するとき、usecase 層のコードまで修正が必要になります。ビジネスロジックが技術的な選択に振り回されてしまいます。
 
-DIPを適用すると、usecase層がinterfaceを定義し、infrastructure層がそれを実装するように依存の方向が逆転します。
+DIP を適用すると、usecase 層が interface を定義し、infrastructure 層がそれを実装するように依存の方向が逆転します。
 
 ```mermaid
 graph LR
@@ -119,9 +119,9 @@ graph LR
     style C fill:#3d7abf,stroke:#2a5a8f,color:#ffffff
 ```
 
-usecase層はinterfaceだけを知っていればよく、具体的な実装には一切依存しません。これが「依存性の逆転」です。
+usecase 層は interface だけを知っていればよく、具体的な実装には一切依存しません。これが「依存性の逆転」です。
 
-次のセクションでは、Goのimplicit interfaceを使ってこの依存性の逆転をさらに自然に実現する方法を見ていきます。
+次のセクションでは、Go の implicit interface を使ってこの依存性の逆転をさらに自然に実現する方法を見ていきます。
 
 ---
 
@@ -188,15 +188,15 @@ type OrderService struct {
 
 ---
 
-## Goのinterfaceによる自然なDIP実現
+## Go の interface による自然な DIP 実現
 
-ここからは、これまで説明してきた「依存関係を内側に向ける」原則を、Goがどのように表現しやすくしているかを見ていきます。以降の内容はクリーンアーキテクチャそのものの定義ではなく、Goの言語特性を活かした実装パターンの一例です。
+ここからは、これまで説明してきた「依存関係を内側に向ける」原則を、Go がどのように表現しやすくしているかを見ていきます。以降の内容はクリーンアーキテクチャそのものの定義ではなく、Go の言語特性を活かした実装パターンの一例です。
 
-多くの言語ではDIPの実現に明示的なinterfaceの宣言と実装が必要です。一方、Goでは **implicit interface（暗黙的なinterface満足）** という特性があります。
+多くの言語では DIP の実現に明示的な interface の宣言と実装が必要です。一方、Go では **implicit interface（暗黙的な interface 満足）** という特性があります。
 
 ### Java/C# との比較
 
-Javaでは、interfaceを定義した側と実装する側の両方が、そのinterfaceの存在を知る必要があります。
+Java では、interface を定義した側と実装する側の両方が、その interface の存在を知る必要があります。
 
 ```java
 // 定義側（usecase層）
@@ -211,7 +211,7 @@ public class PostgresOrderRepository implements OrderRepository {
 }
 ```
 
-Goでは、実装側がinterfaceの存在を知る必要がありません。
+Go では、実装側が interface の存在を知る必要がありません。
 
 ```go
 // 定義側（usecase層）
@@ -230,13 +230,13 @@ func (r *postgresOrderRepository) FindByID(ctx context.Context, id string) (*Ord
 }
 ```
 
-`postgresOrderRepository`は`OrderRepository`をimportしていません。メソッドシグネチャが一致するだけで、自動的にinterfaceを満たします。この特性により、利用側（内側のレイヤー）でinterfaceを定義し、実装側（外側のレイヤー）がそれを満たす構成を取りやすくなります。実装側がinterface自体を直接importする必要がないため、依存関係の方向をコントロールしやすくなります。
+`postgresOrderRepository`は`OrderRepository`を import していません。メソッドシグネチャが一致するだけで、自動的に interface を満たします。この特性により、利用側（内側のレイヤー）で interface を定義し、実装側（外側のレイヤー）がそれを満たす構成を取りやすくなります。実装側が interface 自体を直接 import する必要がないため、依存関係の方向をコントロールしやすくなります。
 
 ただし、実装側のメソッドが内側の型（例：`*domain.Order`）を引数や戻り値に持つ場合、そのパッケージへの依存は発生します。重要なのは、その依存関係の向きが内側に向いていることです。
 
-### 利用側でinterfaceを定義するパターン
+### 利用側で interface を定義するパターン
 
-さらにGoらしいアプローチとして、interfaceを**利用する側**で定義する方法があります。このパターンの実践的な適用例は、第3章「Goのinterface設計」の処方箋1で詳しく解説しています。
+さらに Go らしいアプローチとして、interface を**利用する側**で定義する方法があります。このパターンの実践的な適用例は、第3章「Go の interface 設計」の処方箋1で詳しく解説しています。
 
 ```go
 // usecase/create_order.go
@@ -273,18 +273,18 @@ func (r *orderRepository) FindByID(ctx context.Context, id string) (*domain.Orde
 }
 ```
 
-`CreateOrderInteractor`は`Save`メソッドだけを持つ小さなinterfaceを定義しています。`orderRepository`は`Save`と`FindByID`の両方を持っていますが、`CreateOrderInteractor`は`Save`だけしか知りません。これはインターフェース分離の原則（ISP）に沿った設計です。
+`CreateOrderInteractor`は`Save`メソッドだけを持つ小さな interface を定義しています。`orderRepository`は`Save`と`FindByID`の両方を持っていますが、`CreateOrderInteractor`は`Save`だけしか知りません。これはインターフェース分離の原則（ISP）に沿った設計です。
 
 ### コンパイル時の検証
 
-Goでは、interface満足をコンパイル時に検証するイディオムがあります。
+Go では、interface 満足をコンパイル時に検証するイディオムがあります。
 
 ```go
 // cmd/main.go（コンポジションルート）
 var _ usecase.OrderRepository = (*postgres.OrderRepository)(nil)
 ```
 
-この1行により、`OrderRepository`がinterfaceを満たさなくなった場合にコンパイルエラーが発生します。実行時ではなくコンパイル時に検出できるため、安全です。この検証コードは、すべての依存関係を把握しているコンポジションルート（`main.go`やDIの設定ファイル）に配置します。そうすることで、infrastructure層からusecase層への依存を避けられます。
+この1行により、`OrderRepository`が interface を満たさなくなった場合にコンパイルエラーが発生します。実行時ではなくコンパイル時に検出できるため、安全です。この検証コードは、すべての依存関係を把握しているコンポジションルート（`main.go`や DI の設定ファイル）に配置します。そうすることで、infrastructure 層から usecase 層への依存を避けられます。
 
 ---
 
@@ -296,7 +296,7 @@ var _ usecase.OrderRepository = (*postgres.OrderRepository)(nil)
 
 - **依存性の矢印は常に内側を向きます**: これが唯一絶対のルールです
 - **内側ほど安定性が高いです**: ビジネスルールは技術選択より変更頻度が低いため、内側に配置します
-- **外側は交換可能です**: データベースやUIフレームワークは差し替えられる設計にします
+- **外側は交換可能です**: データベースや UI フレームワークは差し替えられる設計にします
 
 ### 同心円図が伝えていないこと
 
@@ -311,10 +311,10 @@ var _ usecase.OrderRepository = (*postgres.OrderRepository)(nil)
 
 | チェック項目 | 確認方法 |
 | --- | --- |
-| domain層は外側のレイヤーをimportしていないか | `go-cleanarch`や`depguard`で検証 |
-| usecase層はHTTPやDBの具体的な型を参照していないか | import文をgrepで検索 |
-| interfaceは利用側で定義されているか | interface定義の配置場所を確認 |
-| 依存性の注入はmain関数（またはDIコンテナ）で行っているか | `main.go`や`wire.go`を確認 |
+| domain 層は外側のレイヤーを import していないか | `go-cleanarch`や`depguard`で検証 |
+| usecase 層は HTTP や DB の具体的な型を参照していないか | import 文を grep で検索 |
+| interface は利用側で定義されているか | interface 定義の配置場所を確認 |
+| 依存性の注入は main 関数（または DI コンテナ）で行っているか | `main.go`や`wire.go`を確認 |
 | 新しいレイヤーを追加するとき、既存の内側レイヤーに変更は不要か | 思考実験で検証 |
 
 ---
@@ -329,7 +329,7 @@ var _ usecase.OrderRepository = (*postgres.OrderRepository)(nil)
 2. **抽象に依存し、具象に依存しない**（DIP）
 3. **レイヤーの数はプロジェクトの規模に合わせて調整する**
 
-Goのimplicit interfaceは、DIPを実現しやすい強力な仕組みです。interfaceを利用側で定義し、実装側がその存在を知らないままメソッドシグネチャを満たす。このGoの特性を活かすことで、同心円図に描かれた「依存性の矢印がすべて内側を向く」状態を実現しやすくなります。
+Go の implicit interface は、DIP を実現しやすい強力な仕組みです。interface を利用側で定義し、実装側がその存在を知らないままメソッドシグネチャを満たす。この Go の特性を活かすことで、同心円図に描かれた「依存性の矢印がすべて内側を向く」状態を実現しやすくなります。
 
 クリーンアーキテクチャは特定のレイヤー構造を強制するものではなく、依存関係の設計原則として捉えることが重要です。同心円図の「形」ではなく「矢印の方向」に注目してください。
 
@@ -341,7 +341,7 @@ Goのimplicit interfaceは、DIPを実現しやすい強力な仕組みです。
 | --- | --- |
 | クリーンアーキテクチャ原典 | Robert C. Martin, _Clean Architecture_（2017） |
 | 依存性逆転の原則 | Robert C. Martin, _Agile Software Development, Principles, Patterns, and Practices_（2002） |
-| SOLID原則 | Robert C. Martin, [The Principles of OOD](http://butunclebob.com/ArticleS.UncleBob.PrinciplesOfOod) |
+| SOLID 原則 | Robert C. Martin, [The Principles of OOD](http://butunclebob.com/ArticleS.UncleBob.PrinciplesOfOod) |
 | Go Code Review Comments | Go Wiki, [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces) |
 | Go Proverbs | Rob Pike, [Go Proverbs](https://go-proverbs.github.io/) |
 | Hexagonal Architecture | Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) |

@@ -4,17 +4,17 @@ title: "ハンズオン実装編〜最小構成で動かして育てる〜"
 
 ## はじめに
 
-前章の設計を実装します。書く順番は内側から外側、つまりdomain層 → UseCase層 → infrastructure層 → interface層 → mainの順です。依存性ルールに従えば、内側は外側なしでコンパイルとテストが通るはずです。実際にそうなることを確かめながら進めます。
+前章の設計を実装します。書く順番は内側から外側、つまり domain 層 → UseCase 層 → infrastructure 層 → interface 層 → main の順です。依存性ルールに従えば、内側は外側なしでコンパイルとテストが通るはずです。実際にそうなることを確かめながら進めます。
 
 紙面の都合で、5つのユースケースのうち「本を登録する」と「ステータスを進める」を詳しく書きます。残りは同じ型の繰り返しです。
 
 ---
 
-## domain層：値オブジェクトと集約
+## domain 層：値オブジェクトと集約
 
-### ISBN値オブジェクト
+### ISBN 値オブジェクト
 
-前章の決定どおり、ISBNは検証つきの値オブジェクトにします。
+前章の決定どおり、ISBN は検証つきの値オブジェクトにします。
 
 ```go
 // internal/booklog/domain/model/isbn.go
@@ -55,9 +55,9 @@ func NewISBN(s string) (ISBN, error) {
 func (i ISBN) String() string { return string(i) }
 ```
 
-`NewISBN`を通らないISBNは存在できません。第8章で整理した「形式の知識は概念自体に属する」の適用です。
+`NewISBN`を通らない ISBN は存在できません。第8章で整理した「形式の知識は概念自体に属する」の適用です。
 
-### Status値オブジェクト
+### Status 値オブジェクト
 
 ステータスは遷移ルールという振る舞いを持ちます。
 
@@ -90,7 +90,7 @@ func (s Status) Next() (Status, error) {
 }
 ```
 
-### ReadingRecord集約
+### ReadingRecord 集約
 
 不変条件は非公開フィールドとメソッドで守ります（第10章）。
 
@@ -150,7 +150,7 @@ func (r *ReadingRecord) Title() string  { return r.title }
 func (r *ReadingRecord) Status() Status { return r.status }
 ```
 
-この時点でdomain層のテストが書けます。DBやHTTPはまだ登場していません。
+この時点で domain 層のテストが書けます。DB や HTTP はまだ登場していません。
 
 ```go
 // internal/booklog/domain/model/reading_record_test.go
@@ -166,7 +166,7 @@ func TestReadingRecord_ReviewBeforeFinish(t *testing.T) {
 
 ### Repository interface
 
-Reader / Writerを分離してdomain層に置きます（第6章）。
+Reader / Writer を分離して domain 層に置きます（第6章）。
 
 ```go
 // internal/booklog/domain/repository/record_repository.go
@@ -188,11 +188,11 @@ type RecordWriter interface {
 
 ---
 
-## UseCase層：Interactor
+## UseCase 層：Interactor
 
 ### 本を登録する
 
-登録の冪等性チェック（同じISBNは二重登録できない）と、外部APIからの書誌取得のオーケストレーションが入ります。
+登録の冪等性チェック（同じ ISBN は二重登録できない）と、外部 API からの書誌取得のオーケストレーションが入ります。
 
 ```go
 // internal/booklog/usecase/register_book.go
@@ -281,13 +281,13 @@ func (i *AdvanceStatusInteractor) Execute(ctx context.Context, rawISBN string) (
 }
 ```
 
-UseCase層のテストは、Repositoryとfetcherをモックすればインメモリで完結します。モックは1〜3メソッドの小さなinterfaceなので、手書きで数行です。
+UseCase 層のテストは、Repository と fetcher をモックすればインメモリで完結します。モックは1〜3メソッドの小さな interface なので、手書きで数行です。
 
 ---
 
-## infrastructure層：まずインメモリで動かす
+## infrastructure 層：まずインメモリで動かす
 
-最初のバージョンはインメモリ実装で動かします。DBのセットアップなしでサービス全体を起動でき、動くものが早く手に入るからです。
+最初のバージョンはインメモリ実装で動かします。DB のセットアップなしでサービス全体を起動でき、動くものが早く手に入るからです。
 
 ```go
 // internal/booklog/infrastructure/memory/record_repository.go
@@ -320,7 +320,7 @@ func (r *RecordRepository) Save(ctx context.Context, record *model.ReadingRecord
 }
 ```
 
-外部書誌APIのクライアントは、腐敗防止層として実装します。外部レスポンスの形はこのパッケージから外に出しません（実際のレスポンス形式は利用するAPIのドキュメントで確認してください）。
+外部書誌 API のクライアントは、腐敗防止層として実装します。外部レスポンスの形はこのパッケージから外に出しません（実際のレスポンス形式は利用する API のドキュメントで確認してください）。
 
 ```go
 // internal/booklog/infrastructure/openbd/client.go
@@ -353,9 +353,9 @@ func (c *Client) Fetch(ctx context.Context, isbn model.ISBN) (*usecase.BookMetad
 
 ---
 
-## interface層とmain
+## interface 層と main
 
-ハンドラは、必要なInteractorのメソッドだけをinterfaceとして定義します（第3章）。
+ハンドラは、必要な Interactor のメソッドだけを interface として定義します（第3章）。
 
 ```go
 // internal/booklog/interface/rest/handler/record_handler.go
@@ -386,7 +386,7 @@ func (h *RecordHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-mainがコンポジションルートです（第14章）。
+main がコンポジションルートです（第14章）。
 
 ```go
 // cmd/server/main.go
@@ -423,9 +423,9 @@ $ curl -s -X POST localhost:8080/records/9784873119694/advance
 
 ここからが本題です。最小構成のサービスに変更を加えて、これまでの設計判断が何を守ってくれるかを確かめます。
 
-### インメモリからPostgreSQLへ差し替える
+### インメモリから PostgreSQL へ差し替える
 
-`infrastructure/postgres`パッケージを新しく書き、mainの1行を差し替えます。
+`infrastructure/postgres`パッケージを新しく書き、main の1行を差し替えます。
 
 ```go
 // Before
@@ -436,9 +436,9 @@ db, _ := sql.Open("pgx", os.Getenv("DATABASE_URL"))
 repo := postgres.NewRecordRepository(db)
 ```
 
-domain層、UseCase層、interface層のコードとテストには一切手を入れません。第6章でレベル1（完全抽象）を選んだ効果がここに出ます。インメモリ実装は捨てずに残します。UseCase層のテストや、ローカルでの動作確認にそのまま使えるからです。
+domain 層、UseCase 層、interface 層のコードとテストには一切手を入れません。第6章でレベル1（完全抽象）を選んだ効果がここに出ます。インメモリ実装は捨てずに残します。UseCase 層のテストや、ローカルでの動作確認にそのまま使えるからです。
 
-### 依存性ルールをCIで守る
+### 依存性ルールを CI で守る
 
 コードが育つ前に、第17章の仕組みを入れておきます。
 
@@ -447,16 +447,16 @@ go install github.com/roblaszczak/go-cleanarch@latest
 go-cleanarch ./internal/...
 ```
 
-私はこれを最初のPRの時点でCIに入れることをおすすめします。違反ゼロの状態なら導入は5分で終わり、以後の違反はマージ前に止まります。
+私はこれを最初の PR の時点で CI に入れることをおすすめします。違反ゼロの状態なら導入は5分で終わり、以後の違反はマージ前に止まります。
 
 ### 機能を足す：月間統計
 
 「月ごとの読了数を見たい」を実装するときの手順も、もう決まっています。
 
-1. `RecordReader`に`CountFinishedByMonth`を足す（domain層のinterface拡張）
-2. `GetMonthlyStatsInteractor`を書く（UseCase層）
-3. インメモリ実装とPostgreSQL実装にメソッドを足す（infrastructure層）
-4. ハンドラとルーティングを足して、mainで配線する
+1. `RecordReader`に`CountFinishedByMonth`を足す（domain 層の interface 拡張）
+2. `GetMonthlyStatsInteractor`を書く（UseCase 層）
+3. インメモリ実装と PostgreSQL 実装にメソッドを足す（infrastructure 層）
+4. ハンドラとルーティングを足して、main で配線する
 
 変更が4つの層に1つずつ、依存の向きに沿って積み上がるだけで、既存コードの修正はほぼ発生しません。機能追加のたびにこの型で進められることが、この本で積み重ねてきた設計判断の成果です。
 
@@ -464,9 +464,9 @@ go-cleanarch ./internal/...
 
 ## まとめ
 
-- 内側（domain層）から書き始めると、各層が完成した時点でテストが通り、手戻りがありません
-- 最初の永続化はインメモリで十分です。Repositoryを抽象化してあれば、DBへの差し替えはmainの1行です
-- 依存性ルールのCIチェックは、コードが小さいうちに入れるのが一番安上がりです
+- 内側（domain 層）から書き始めると、各層が完成した時点でテストが通り、手戻りがありません
+- 最初の永続化はインメモリで十分です。Repository を抽象化してあれば、DB への差し替えは main の1行です
+- 依存性ルールの CI チェックは、コードが小さいうちに入れるのが一番安上がりです
 - ここから先、認証を足すのも、感想の公開機能を足すのも、この章と同じ型の繰り返しです
 
-自分の題材で、もう一度この2章の手順をなぞってみてください。題材はTODOアプリでも家計簿でも構いません。設計編の5ステップを紙に書き出すところから始めれば、この本の判断基準があなたのものになります。
+自分の題材で、もう一度この2章の手順をなぞってみてください。題材は TODO アプリでも家計簿でも構いません。設計編の5ステップを紙に書き出すところから始めれば、この本の判断基準があなたのものになります。

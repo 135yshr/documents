@@ -1,14 +1,14 @@
 ---
-title: "依存性ルールをCIで守る〜静的解析による自動チェック〜"
+title: "依存性ルールを CI で守る〜静的解析による自動チェック〜"
 ---
 
 ## はじめに
 
-クリーンアーキテクチャの最も重要なルールは「依存性は常に内側に向かう」という**依存性ルール**です。しかし、コードレビューで依存方向を目視でチェックするには限界があります。チームが大きくなるほど、うっかり外側のレイヤーをimportしてしまう事故は増えていきます。
+クリーンアーキテクチャの最も重要なルールは「依存性は常に内側に向かう」という**依存性ルール**です。しかし、コードレビューで依存方向を目視でチェックするには限界があります。チームが大きくなるほど、うっかり外側のレイヤーを import してしまう事故は増えていきます。
 
-私のチームでも、domain層からinfrastructure層のパッケージをimportしてしまうPRが月に数回発生していました。レビューで気づけば良いのですが、見落とすとアーキテクチャの崩壊が静かに進行します。
+私のチームでも、domain 層から infrastructure 層のパッケージを import してしまう PR が月に数回発生していました。レビューで気づけば良いのですが、見落とすとアーキテクチャの崩壊が静かに進行します。
 
-この章では、Goの`import`文を静的解析ツールで検査し、CIパイプラインで依存性ルール違反を自動的に検出・ブロックする方法を紹介します。
+この章では、Go の`import`文を静的解析ツールで検査し、CI パイプラインで依存性ルール違反を自動的に検出・ブロックする方法を紹介します。
 
 ---
 
@@ -43,7 +43,7 @@ graph LR
 
 しかし、実際のプロジェクトでは次のような違反が起きがちです。
 
-### パターン1：domain層からinfrastructure層への直接依存
+### パターン1：domain 層から infrastructure 層への直接依存
 
 ```go
 // ❌ domain/service/pricing.go
@@ -60,9 +60,9 @@ func CalcPrice(orderID string) (int, error) {
 }
 ```
 
-domain層がPostgreSQLの存在を知ってしまうと、DBを変更するときにdomain層まで修正が必要になります。
+domain 層が PostgreSQL の存在を知ってしまうと、DB を変更するときに domain 層まで修正が必要になります。
 
-### パターン2：usecase層からinterface層への逆方向依存
+### パターン2：usecase 層から interface 層への逆方向依存
 
 ```go
 // ❌ usecase/create_order.go
@@ -77,7 +77,7 @@ func (i *CreateOrderInteractor) Execute(req dto.CreateOrderRequest) error {
 }
 ```
 
-usecase層がHTTPのDTO構造体を知ってしまうと、gRPCやCLIなど別のインターフェースへの対応が困難になります。
+usecase 層が HTTP の DTO 構造体を知ってしまうと、gRPC や CLI など別のインターフェースへの対応が困難になります。
 
 ### パターン3：パッケージ間の循環依存
 
@@ -89,13 +89,13 @@ import "myapp/internal/order/interface/rest/handler"
 import "myapp/internal/order/usecase"
 ```
 
-Go言語ではパッケージの循環importはコンパイルエラーになるため、循環依存そのものは防げます。しかし、間接的な循環（A → B → C → A）は検出しづらい場合があります。
+Go 言語ではパッケージの循環 import はコンパイルエラーになるため、循環依存そのものは防げます。しかし、間接的な循環（A → B → C → A）は検出しづらい場合があります。
 
 ---
 
 ## depguard によるインポート制限の設定
 
-[depguard](https://github.com/OpenPeeDeeP/depguard)は、パッケージごとに許可・拒否するimportを宣言的に設定できるツールです。[golangci-lint](https://golangci-lint.run/)に組み込まれているため、既存のlint環境にすぐ導入できます。
+[depguard](https://github.com/OpenPeeDeeP/depguard)は、パッケージごとに許可・拒否する import を宣言的に設定できるツールです。[golangci-lint](https://golangci-lint.run/)に組み込まれているため、既存の lint 環境にすぐ導入できます。
 
 ### 基本設定
 
@@ -166,7 +166,7 @@ go-cleanarch ./internal/...
 
 ### レイヤーの認識ルール
 
-go-cleanarchはディレクトリ名をもとにレイヤーを判定します。デフォルトでは以下のマッピングが使われます。
+go-cleanarch はディレクトリ名をもとにレイヤーを判定します。デフォルトでは以下のマッピングが使われます。
 
 | ディレクトリ名            | レイヤー                 |
 | ------------------------- | ------------------------ |
@@ -185,17 +185,17 @@ go-cleanarchはディレクトリ名をもとにレイヤーを判定します�
   (import: myapp/internal/order/infrastructure/postgres)
 ```
 
-go-cleanarchの利点は、**設定ファイル不要**で導入コストが低い点です。ディレクトリ命名規約に従っていれば、即座に使い始められます。
+go-cleanarch の利点は、**設定ファイル不要**で導入コストが低い点です。ディレクトリ命名規約に従っていれば、即座に使い始められます。
 
 ---
 
 ## kcmvp/archunit による柔軟なアーキテクチャテスト
 
-[kcmvp/archunit](https://github.com/kcmvp/archunit)は、Goのテストコードの中でアーキテクチャルールを宣言的に記述できるライブラリです。JVM向けの[ArchUnit](https://www.archunit.org/)にインスパイアされており、レイヤーを定義してから依存関係のルールを検証する流れになっています。
+[kcmvp/archunit](https://github.com/kcmvp/archunit)は、Go のテストコードの中でアーキテクチャルールを宣言的に記述できるライブラリです。JVM 向けの[ArchUnit](https://www.archunit.org/)にインスパイアされており、レイヤーを定義してから依存関係のルールを検証する流れになっています。
 
 ### テストコードでルールを定義
 
-archunitではまず`ArchLayer`でレイヤーを宣言し、`ArchUnit`でまとめてから、`Validate`にルールを渡して検証します。依存方向のルールは`Layers(...).ShouldNotRefer(...)`という流暢なAPIで記述できます。
+archunit ではまず`ArchLayer`でレイヤーを宣言し、`ArchUnit`でまとめてから、`Validate`にルールを渡して検証します。依存方向のルールは`Layers(...).ShouldNotRefer(...)`という流暢な API で記述できます。
 
 ```go
 // architecture_test.go
@@ -238,15 +238,15 @@ func TestDependencyRule(t *testing.T) {
 }
 ```
 
-### archunitの利点
+### archunit の利点
 
-archunitには他のツールにない特長があります。
+archunit には他のツールにない特長があります。
 
-- **Goのテストとして実行できる**: `go test`で依存性ルールを検証でき、既存のテスト基盤にそのまま組み込めます
-- **宣言的で流暢なAPI**: `Layers(...).ShouldNotRefer(...)`のようにルールをチェーンで記述でき、意図が読み取りやすくなります
+- **Go のテストとして実行できる**: `go test`で依存性ルールを検証でき、既存のテスト基盤にそのまま組み込めます
+- **宣言的で流暢な API**: `Layers(...).ShouldNotRefer(...)`のようにルールをチェーンで記述でき、意図が読み取りやすくなります
 - **豊富な組み込みルール**: `ShouldNotRefer`や`ShouldOnlyRefer`といった依存ルールに加え、`BestPractices`で命名規約やパッケージ構成などをまとめて検査できます
 
-CLIで完結させたい場合は、[arch-go](https://github.com/arch-go/arch-go)という選択肢もあります。arch-goはYAMLでアーキテクチャルールを定義するスタンドアロンのCLIツールで、テストコードを書かずに依存関係を検証できます。テストスイートに組み込むならarchunit、独立したチェックコマンドとして回すならarch-go、と使い分けられます。
+CLI で完結させたい場合は、[arch-go](https://github.com/arch-go/arch-go)という選択肢もあります。arch-go は YAML でアーキテクチャルールを定義するスタンドアロンの CLI ツールで、テストコードを書かずに依存関係を検証できます。テストスイートに組み込むなら archunit、独立したチェックコマンドとして回すなら arch-go、と使い分けられます。
 
 ---
 
@@ -256,20 +256,20 @@ CLIで完結させたい場合は、[arch-go](https://github.com/arch-go/arch-go
 
 | 項目 | depguard | go-cleanarch | kcmvp/archunit |
 | --- | --- | --- | --- |
-| 導入方法 | golangci-lint に組み込み | スタンドアロンCLI | テストコード |
-| 設定 | YAML（`.golangci.yml`） | 設定不要（命名規約ベース） | Goテストコード |
+| 導入方法 | golangci-lint に組み込み | スタンドアロン CLI | テストコード |
+| 設定 | YAML（`.golangci.yml`） | 設定不要（命名規約ベース） | Go テストコード |
 | 柔軟性 | 高い（任意のパッケージを指定可） | 中程度（命名規約に依存） | 非常に高い（プログラマブル） |
 | エラーメッセージ | カスタムメッセージ設定可 | 固定フォーマット | テスト失敗メッセージ |
 | 実行コマンド | `golangci-lint run` | `go-cleanarch ./...` | `go test ./...` |
-| 推奨シーン | 既にgolangci-lintを使っているプロジェクト | 素早く導入したいとき | 複雑なルールを定義したいとき |
+| 推奨シーン | 既に golangci-lint を使っているプロジェクト | 素早く導入したいとき | 複雑なルールを定義したいとき |
 
-私のチームでは、**depguard をメインに使い、archunit で補完する**構成に落ち着きました。depguardはgolangci-lintの一部として毎回実行され、archunitはテストスイートの中でより細かいルールを検証します。
+私のチームでは、**depguard をメインに使い、archunit で補完する**構成に落ち着きました。depguard は golangci-lint の一部として毎回実行され、archunit はテストスイートの中でより細かいルールを検証します。
 
 ---
 
 ## CI パイプラインへの組み込み
 
-ツールを導入しただけでは不十分です。CIパイプラインに組み込んで、違反があるPRをマージできないようにすることが重要です。
+ツールを導入しただけでは不十分です。CI パイプラインに組み込んで、違反がある PR をマージできないようにすることが重要です。
 
 ### GitHub Actions の設定例
 
@@ -307,7 +307,7 @@ jobs:
 
 ### ブランチ保護ルールとの連携
 
-GitHub Actions のステータスチェックをブランチ保護ルールの必須チェックに追加すると、依存性ルール違反があるPRはマージボタンが無効化されます。
+GitHub Actions のステータスチェックをブランチ保護ルールの必須チェックに追加すると、依存性ルール違反がある PR はマージボタンが無効化されます。
 
 ```text
 Settings → Branches → Branch protection rules → main
@@ -315,7 +315,7 @@ Settings → Branches → Branch protection rules → main
     ✅ dependency-rule
 ```
 
-この設定により、コードレビューで見落としても、CIが最後の砦として依存性ルール違反をブロックします。
+この設定により、コードレビューで見落としても、CI が最後の砦として依存性ルール違反をブロックします。
 
 ---
 
@@ -325,18 +325,18 @@ Settings → Branches → Branch protection rules → main
 
 既存プロジェクトに一気に導入すると、大量の違反が検出されて対応が追いつかなくなります。私のチームでは以下の順序で導入しました。
 
-1. **まずgo-cleanarchで現状を把握する**: 設定不要で実行でき、違反の全体像がつかめます
-2. **depguardをwarningモードで導入する**: 最初はCIを失敗させず、違反を可視化するだけにします
-3. **既存の違反を修正する**: モジュールごとに修正PRを作成し、段階的にクリーンにします
-4. **CIを必須チェックに昇格する**: 既存の違反がゼロになった時点で、必須チェックに切り替えます
+1. **まず go-cleanarch で現状を把握する**: 設定不要で実行でき、違反の全体像がつかめます
+2. **depguard を warning モードで導入する**: 最初は CI を失敗させず、違反を可視化するだけにします
+3. **既存の違反を修正する**: モジュールごとに修正 PR を作成し、段階的にクリーンにします
+4. **CI を必須チェックに昇格する**: 既存の違反がゼロになった時点で、必須チェックに切り替えます
 
 ### よくある落とし穴
 
 依存性ルールの自動チェックを導入する際に、私のチームが経験した落とし穴をいくつか共有します。
 
-- **テストファイルの除外を忘れる**: `_test.go`ファイルではテスト用のモックやフィクスチャをimportする場合があります。depguardの`files`設定で`!**/*_test.go`を使い、テストファイルを除外できます
-- **ルールが厳しすぎる**: 全てのimportを禁止するのではなく、レイヤー間の依存方向だけを制限します。同一レイヤー内のimportは自由にします
-- **エラーメッセージが不親切**: depguardの`desc`フィールドに「なぜ禁止なのか」と「どうすべきか」を書くと、開発者が自力で修正できるようになります
+- **テストファイルの除外を忘れる**: `_test.go`ファイルではテスト用のモックやフィクスチャを import する場合があります。depguard の`files`設定で`!**/*_test.go`を使い、テストファイルを除外できます
+- **ルールが厳しすぎる**: 全ての import を禁止するのではなく、レイヤー間の依存方向だけを制限します。同一レイヤー内の import は自由にします
+- **エラーメッセージが不親切**: depguard の`desc`フィールドに「なぜ禁止なのか」と「どうすべきか」を書くと、開発者が自力で修正できるようになります
 
 ```yaml
 deny:
@@ -349,15 +349,15 @@ deny:
 
 ## まとめ
 
-クリーンアーキテクチャの依存性ルールは、コードレビューだけに頼ると必ずどこかで崩れます。Goの`import`文を静的解析ツールで検査し、CIで自動的にブロックすることで、アーキテクチャの一貫性を維持できます。
+クリーンアーキテクチャの依存性ルールは、コードレビューだけに頼ると必ずどこかで崩れます。Go の`import`文を静的解析ツールで検査し、CI で自動的にブロックすることで、アーキテクチャの一貫性を維持できます。
 
 | ツール         | 特長                             | 導入コスト |
 | -------------- | -------------------------------- | ---------- |
-| depguard       | golangci-lint統合、柔軟な設定    | 低い       |
+| depguard       | golangci-lint 統合、柔軟な設定   | 低い       |
 | go-cleanarch   | 設定不要、即座に使える           | 非常に低い |
 | kcmvp/archunit | テストコードで宣言的にルール定義 | 中程度     |
 
-大切なのは、ツールの選択よりも**CIで必須チェックにする**ことです。どんなに良いツールも、実行されなければ意味がありません。まずはgo-cleanarchで現状を把握し、depguardで段階的にルールを厳格化していくのがおすすめです。
+大切なのは、ツールの選択よりも**CI で必須チェックにする**ことです。どんなに良いツールも、実行されなければ意味がありません。まずは go-cleanarch で現状を把握し、depguard で段階的にルールを厳格化していくのがおすすめです。
 
 ---
 
@@ -371,5 +371,5 @@ deny:
 | kcmvp/archunit | [kcmvp/archunit - GitHub](https://github.com/kcmvp/archunit) |
 | arch-go | [arch-go/arch-go - GitHub](https://github.com/arch-go/arch-go) |
 | golangci-lint | [golangci-lint 公式ドキュメント](https://golangci-lint.run/) |
-| ArchUnit（JVM版） | [ArchUnit 公式サイト](https://www.archunit.org/) |
+| ArchUnit（JVM 版） | [ArchUnit 公式サイト](https://www.archunit.org/) |
 | GitHub Actions ステータスチェック | [GitHub Docs - Protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) |

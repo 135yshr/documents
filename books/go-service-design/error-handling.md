@@ -6,14 +6,14 @@ title: "エラーハンドリング設計〜ドメインエラーとインフラ
 
 :::message
 
-本章は私がGoでDDD × クリーンアーキテクチャを採用したプロジェクトを運用する中で得た気づきをまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+本章は私が Go で DDD × クリーンアーキテクチャを採用したプロジェクトを運用する中で得た気づきをまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
 
 :::
 
-DDDで設計されたGoのプロジェクトで、最初に混乱したのがエラーハンドリングでした。
+DDD で設計された Go のプロジェクトで、最初に混乱したのがエラーハンドリングでした。
 
-- ドメイン層のバリデーションエラーとDBの接続エラーが同じ`error`として返されます
-- Handler層で`err != nil`の中身を見て、400なのか500なのかを判断するif文が増殖します
+- ドメイン層のバリデーションエラーと DB の接続エラーが同じ`error`として返されます
+- Handler 層で`err != nil`の中身を見て、400なのか500なのかを判断する if 文が増殖します
 - エラーメッセージをそのままクライアントに返してしまい、内部構造が漏洩します
 
 この章では、教科書通りのエラーハンドリングから始めて、**運用で見つかった課題と改善の過程**を共有します。
@@ -22,21 +22,21 @@ DDDで設計されたGoのプロジェクトで、最初に混乱したのがエ
 
 ## エラーの3分類
 
-まず教科書通りに、DDDのレイヤーに対応させてエラーを3つに分類しました。
+まず教科書通りに、DDD のレイヤーに対応させてエラーを3つに分類しました。
 
-| 分類 | 発生レイヤー | 例 | HTTPステータス |
+| 分類 | 発生レイヤー | 例 | HTTP ステータス |
 | --- | --- | --- | --- |
-| ドメインエラー | Domain層 | 「在庫が不足しています」「メールアドレスの形式が不正です」 | 400 / 409 / 422 |
-| アプリケーションエラー | UseCase層 | 「指定されたリソースが見つかりません」「権限がありません」 | 404 / 403 |
-| インフラエラー | Infrastructure層 | 「DBに接続できません」「外部APIがタイムアウトしました」 | 500 / 502 / 503 |
+| ドメインエラー | Domain 層 | 「在庫が不足しています」「メールアドレスの形式が不正です」 | 400 / 409 / 422 |
+| アプリケーションエラー | UseCase 層 | 「指定されたリソースが見つかりません」「権限がありません」 | 404 / 403 |
+| インフラエラー | Infrastructure 層 | 「DB に接続できません」「外部 API がタイムアウトしました」 | 500 / 502 / 503 |
 
 分類自体は正しいのですが、問題は**実装方法**でした。
 
 ---
 
-## 最初の設計：sentinel errorだけで始めた
+## 最初の設計：sentinel error だけで始めた
 
-最初はGo標準の`errors.New`でsentinel errorを定義しました。
+最初は Go 標準の`errors.New`で sentinel error を定義しました。
 
 ```go
 // domain/model/errors.go
@@ -82,9 +82,9 @@ if err := job.Start(totalCount); err != nil {
 
 ---
 
-## 課題：Handler層での分岐が爆発した
+## 課題：Handler 層での分岐が爆発した
 
-プロジェクトが成長するにつれ、Handler層のエラー処理がこうなりました。
+プロジェクトが成長するにつれ、Handler 層のエラー処理がこうなりました。
 
 ```go
 // ❌ Handler層でsentinel errorを個別に判定
@@ -110,13 +110,13 @@ func (h *JobHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-sentinel errorが増えるたびにHandler層のif文が増殖します。**エラーの種類とHTTPステータスの対応が散在**してしまいました。
+sentinel error が増えるたびに Handler 層の if 文が増殖します。**エラーの種類と HTTP ステータスの対応が散在**してしまいました。
 
 ---
 
-## 改善：CodedErrorパターンの導入
+## 改善：CodedError パターンの導入
 
-sentinel errorを維持しつつ、**エラーコードとHTTPステータスを組み込んだCodedError型**を導入しました。
+sentinel error を維持しつつ、**エラーコードと HTTP ステータスを組み込んだ CodedError 型**を導入しました。
 
 ```go
 // pkg/apperror/coded_error.go
@@ -170,9 +170,9 @@ var (
 )
 ```
 
-### Handler層がシンプルになる
+### Handler 層がシンプルになる
 
-CodedErrorを導入したことで、Handler層のエラー処理を**1箇所に集約**できました。
+CodedError を導入したことで、Handler 層のエラー処理を**1箇所に集約**できました。
 
 ```go
 // interface/rest/handler/error_handler.go
@@ -208,17 +208,17 @@ func (h *JobHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-これにより、if文の分岐がなくなりました。`HandleError`は`errors.As`で**型**（`*CodedError`）を判定しているため、どの`CodedError`でも同じ処理で扱えます。
+これにより、if 文の分岐がなくなりました。`HandleError`は`errors.As`で**型**（`*CodedError`）を判定しているため、どの`CodedError`でも同じ処理で扱えます。
 
-なお、`apperror.ErrNotFound`などはパッケージレベルのポインタ変数なので、`errors.Is(err, apperror.ErrNotFound)`による値の比較も機能します。特定のエラー種別をHandler層で区別したい場合は`errors.Is`、全`CodedError`を一括処理する場合は`errors.As`が適しています。
+なお、`apperror.ErrNotFound`などはパッケージレベルのポインタ変数なので、`errors.Is(err, apperror.ErrNotFound)`による値の比較も機能します。特定のエラー種別を Handler 層で区別したい場合は`errors.Is`、全`CodedError`を一括処理する場合は`errors.As`が適しています。
 
 `errors.Is`と`errors.As`はどちらもエラーチェーンを辿って判定します。`fmt.Errorf("context: %w", apperror.ErrNotFound)`のようにラップされていても、`HandleError`は`*CodedError`を取り出せます。
 
 ---
 
-## ドメインエラーとCodedErrorの使い分け
+## ドメインエラーと CodedError の使い分け
 
-ドメイン層ではsentinel errorを使い、UseCase層（Interactor）でCodedErrorに変換します。
+ドメイン層では sentinel error を使い、UseCase 層（Interactor）で CodedError に変換します。
 
 ```go
 // domain/model/errors.go（変更なし）
@@ -258,9 +258,9 @@ func (i *CreateJobInteractor) Execute(ctx context.Context, req *CreateJobInput) 
 }
 ```
 
-### なぜドメイン層はsentinel errorのままなのか
+### なぜドメイン層は sentinel error のままなのか
 
-ドメイン層は**HTTPステータスやエラーコードを知るべきではない**からです。ドメインの関心事は「ビジネスルール違反が起きたこと」であり、HTTP 400や409への変換はプレゼンテーションの責務です。
+ドメイン層は**HTTP ステータスやエラーコードを知るべきではない**からです。ドメインの関心事は「ビジネスルール違反が起きたこと」であり、HTTP 400や409への変換はプレゼンテーションの責務です。
 
 ```go
 // usecase/get_job_interactor.go
@@ -282,7 +282,7 @@ func (i *GetJobInteractor) Execute(ctx context.Context, id string) (*GetJobOutpu
 
 ### 教科書の主張と実務のギャップ
 
-クリーンアーキテクチャの解説では「インフラ層はインフラエラーをそのまま返し、UseCase層で解釈すべき」と述べられることがあります。しかし実務では**インフラ層でDBエラーをドメインエラーに変換する**パターンが有効でした。
+クリーンアーキテクチャの解説では「インフラ層はインフラエラーをそのまま返し、UseCase 層で解釈すべき」と述べられることがあります。しかし実務では**インフラ層で DB エラーをドメインエラーに変換する**パターンが有効でした。
 
 ```go
 // infrastructure/postgres/job_repository.go
@@ -299,20 +299,20 @@ func (r *jobRepository) FindByID(ctx context.Context, id string) (*model.ImportJ
 }
 ```
 
-`gorm.ErrRecordNotFound`を`model.ErrTaskNotFound`に変換しています。ヘキサゴナルアーキテクチャでは、アダプター（Repository実装）が技術的なエラーをドメインが理解できる形に変換する責務を持つとされており、この変換は**境界での翻訳**として合理的だと考えています。
+`gorm.ErrRecordNotFound`を`model.ErrTaskNotFound`に変換しています。ヘキサゴナルアーキテクチャでは、アダプター（Repository 実装）が技術的なエラーをドメインが理解できる形に変換する責務を持つとされており、この変換は**境界での翻訳**として合理的だと考えています。
 
-ただし、この変換ロジックのユニットテストにはDBのモックやtestcontainersが必要になる点は留意してください。
+ただし、この変換ロジックのユニットテストには DB のモックや testcontainers が必要になる点は留意してください。
 
 ### なぜ境界での変換が合理的か
 
-1. **Interactorが`gorm`パッケージを知らずに済む** — Interactorで`gorm.ErrRecordNotFound`を判定すると、インフラ詳細への依存が生まれます。
-2. **Repositoryはドメインとインフラの境界である** — Repository interfaceはdomain層に定義されています。その実装は「ドメインの言葉に翻訳して返す」責務を持っています。
+1. **Interactor が`gorm`パッケージを知らずに済む** — Interactor で`gorm.ErrRecordNotFound`を判定すると、インフラ詳細への依存が生まれます。
+2. **Repository はドメインとインフラの境界である** — Repository interface は domain 層に定義されています。その実装は「ドメインの言葉に翻訳して返す」責務を持っています。
 
-なお、この設計ではインフラ層がドメインのsentinel error（`model.ErrTaskNotFound`）に依存します。ドメインのエラーシンボルを変更するとインフラ層にも波及します。ただし、Infrastructure→Domainの方向はクリーンアーキテクチャの依存方向として正しいため、許容範囲と判断しました。
+なお、この設計ではインフラ層がドメインの sentinel error（`model.ErrTaskNotFound`）に依存します。ドメインのエラーシンボルを変更するとインフラ層にも波及します。ただし、Infrastructure→Domain の方向はクリーンアーキテクチャの依存方向として正しいため、許容範囲と判断しました。
 
 ### 変換すべきでないケース
 
-一方、**Repository層がCodedErrorを直接返す**パターンは避けるべきです。
+一方、**Repository 層が CodedError を直接返す**パターンは避けるべきです。
 
 ```go
 // ❌ Repository層がHTTPステータスを含むCodedErrorを返している
@@ -328,7 +328,7 @@ func (r *userRepository) Save(ctx context.Context, u *model.User) error {
 }
 ```
 
-`apperror.ErrDuplicateEntry`はHTTPステータス400を内包しています。Repository層がこの型を返すと、インフラ層がHTTPレスポンスの知識を持つことになり、レイヤー間の責務が曖昧になります。
+`apperror.ErrDuplicateEntry`は HTTP ステータス400を内包しています。Repository 層がこの型を返すと、インフラ層が HTTP レスポンスの知識を持つことになり、レイヤー間の責務が曖昧になります。
 
 ### 変換場所の判断基準
 
@@ -336,11 +336,11 @@ func (r *userRepository) Save(ctx context.Context, u *model.User) error {
 
 | 変換元 | 変換先 | 変換場所 | 例 |
 | --- | --- | --- | --- |
-| DB固有エラー | ドメインsentinel error | Repository層 | `gorm.ErrRecordNotFound` → `model.ErrTaskNotFound` |
-| DB固有エラー | ラップして伝播 | Repository層 | 接続エラー → `fmt.Errorf("failed: %w", err)` |
-| ドメインsentinel error | CodedError | UseCase層 | `model.ErrDuplicateEmail` → `apperror.ErrDuplicateEntry` |
+| DB 固有エラー | ドメイン sentinel error | Repository 層 | `gorm.ErrRecordNotFound` → `model.ErrTaskNotFound` |
+| DB 固有エラー | ラップして伝播 | Repository 層 | 接続エラー → `fmt.Errorf("failed: %w", err)` |
+| ドメイン sentinel error | CodedError | UseCase 層 | `model.ErrDuplicateEmail` → `apperror.ErrDuplicateEntry` |
 
-ルールは1つです。**Repository層はドメインのsentinel errorまでしか返さず、CodedErrorへの変換はUseCase層が担います**。`FindByID`の例と同じパターンを、一意制約違反にも適用します。
+ルールは1つです。**Repository 層はドメインの sentinel error までしか返さず、CodedError への変換は UseCase 層が担います**。`FindByID`の例と同じパターンを、一意制約違反にも適用します。
 
 ### 一意制約違反の変換例
 
@@ -381,7 +381,7 @@ func (i *CreateUserInteractor) Execute(ctx context.Context, input *CreateUserInp
 }
 ```
 
-この構造は`FindByID`と同じパターンです。Repository層はDB固有エラーをドメインのsentinel errorに変換し、UseCase層はsentinel errorをCodedErrorに変換します。各レイヤーの変換責務が一貫しているため、新しいエラーが増えても同じルールで判断できます。
+この構造は`FindByID`と同じパターンです。Repository 層は DB 固有エラーをドメインの sentinel error に変換し、UseCase 層は sentinel error を CodedError に変換します。各レイヤーの変換責務が一貫しているため、新しいエラーが増えても同じルールで判断できます。
 
 ---
 
@@ -447,7 +447,7 @@ writeJSON(w, internal.HTTPStatus(), ErrorResponse{
 // POST /login → "メールアドレスまたはパスワードが間違っています"
 ```
 
-### HTTPステータスコードでリソースの存在を推測させない
+### HTTP ステータスコードでリソースの存在を推測させない
 
 `404 Not Found`と`403 Forbidden`を使い分けると、リソースの存在が推測できてしまいます。認可エラーでもリソースの存在を隠したい場合は、一律`404`を返す設計を検討してください。
 
@@ -481,13 +481,13 @@ func HandleError(w http.ResponseWriter, err error) {
 | レイヤー | エラーの責務 | 実装パターン |
 | --- | --- | --- |
 | Domain | ビジネスルール違反を表現する | sentinel error（`errors.New`） |
-| Infrastructure | DBエラーをドメインの言葉に翻訳する | 「見つからない」→ sentinel error、それ以外 → `%w`でラップ |
-| UseCase | ドメインエラーをCodedErrorに変換する | `apperror.ErrXxx`を返す |
-| Handler | CodedErrorをHTTPレスポンスに変換する | `errors.As`で型判定、1箇所で集約処理 |
+| Infrastructure | DB エラーをドメインの言葉に翻訳する | 「見つからない」→ sentinel error、それ以外 → `%w`でラップ |
+| UseCase | ドメインエラーを CodedError に変換する | `apperror.ErrXxx`を返す |
+| Handler | CodedError を HTTP レスポンスに変換する | `errors.As`で型判定、1箇所で集約処理 |
 
-最初はsentinel errorだけで始め、Handler層のif文が爆発した時点でCodedErrorを導入しました。段階的に改善できるのがこのパターンの利点です。
+最初は sentinel error だけで始め、Handler 層の if 文が爆発した時点で CodedError を導入しました。段階的に改善できるのがこのパターンの利点です。
 
-重要なのは**エラーの変換場所を明確にする**ことです。「見つからない」のような事実の翻訳はRepository層で、「重複エントリ」のようなビジネス判断はUseCase層で行います。
+重要なのは**エラーの変換場所を明確にする**ことです。「見つからない」のような事実の翻訳は Repository 層で、「重複エントリ」のようなビジネス判断は UseCase 層で行います。
 
 ---
 
@@ -495,7 +495,7 @@ func HandleError(w http.ResponseWriter, err error) {
 
 | 内容 | 出典 |
 | --- | --- |
-| Goのエラーハンドリング | Go Blog, [Working with Errors in Go 1.13](https://go.dev/blog/go1.13-errors) |
-| DDDのエラー設計 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
+| Go のエラーハンドリング | Go Blog, [Working with Errors in Go 1.13](https://go.dev/blog/go1.13-errors) |
+| DDD のエラー設計 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
 | エラー設計の考え方 | Dave Cheney, [Don't just check errors, handle them gracefully](https://dave.cheney.net/2016/04/27/dont-just-check-errors-handle-them-gracefully)（2016年。`errors.Is`/`errors.As`導入前の記事ですが、エラーを呼び出し元に判断させる設計思想は現在も有効です） |
 | セキュリティ観点のエラー処理 | OWASP, [Improper Error Handling](https://owasp.org/www-community/Improper_Error_Handling) |

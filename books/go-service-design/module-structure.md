@@ -1,24 +1,24 @@
 ---
-title: "モジュール構成〜境界づけられたコンテキストをGoに落とし込む〜"
+title: "モジュール構成〜境界づけられたコンテキストを Go に落とし込む〜"
 ---
 
 ## はじめに
 
-DDDで戦術的パターン（エンティティ、値オブジェクト、リポジトリ等）を導入しても、モジュール境界が曖昧なままだとドメインモデルが肥大化し、変更の影響範囲が広がっていきます。この問題を解決する戦略的パターンが**境界づけられたコンテキスト（Bounded Context）**です。
+DDD で戦術的パターン（エンティティ、値オブジェクト、リポジトリ等）を導入しても、モジュール境界が曖昧なままだとドメインモデルが肥大化し、変更の影響範囲が広がっていきます。この問題を解決する戦略的パターンが**境界づけられたコンテキスト（Bounded Context）**です。
 
-本章では、境界づけられたコンテキストの概念を整理した上で、Goの`internal`パッケージやGo Workspaceを活用してモジュール境界をコードレベルで表現する方法を紹介します。
+本章では、境界づけられたコンテキストの概念を整理した上で、Go の`internal`パッケージや Go Workspace を活用してモジュール境界をコードレベルで表現する方法を紹介します。
 
 ---
 
 ## 境界づけられたコンテキストとは
 
-境界づけられたコンテキストは、Eric Evansが『Domain-Driven Design』で提唱した概念です。特定のドメインモデルが有効な範囲を明示的に区切ることで、モデルの一貫性を保ちます。
+境界づけられたコンテキストは、Eric Evans が『Domain-Driven Design』で提唱した概念です。特定のドメインモデルが有効な範囲を明示的に区切ることで、モデルの一貫性を保ちます。
 
 > A Bounded Context delimits the applicability of a particular model. Bounding Contexts gives team members a clear and shared understanding of what has to be consistent and what can develop independently.
 >
 > — Eric Evans, _Domain-Driven Design: Tackling Complexity in the Heart of Software_（2003）
 
-たとえばECサイトを考えてみます。「商品」という概念は、カタログ管理と在庫管理では異なる属性を持ちます。
+たとえば EC サイトを考えてみます。「商品」という概念は、カタログ管理と在庫管理では異なる属性を持ちます。
 
 ```mermaid
 graph LR
@@ -41,7 +41,7 @@ graph LR
 
 ## Go の internal パッケージによるアクセス制御
 
-Goには`internal`パッケージという仕組みがあります。`internal`ディレクトリ配下のコードは、その親ディレクトリのツリー内からしかインポートできません。
+Go には`internal`パッケージという仕組みがあります。`internal`ディレクトリ配下のコードは、その親ディレクトリのツリー内からしかインポートできません。
 
 > An import of a path containing the element "internal" is disallowed if the importing code is outside the tree rooted at the parent of the "internal" directory.
 >
@@ -51,7 +51,7 @@ Goには`internal`パッケージという仕組みがあります。`internal`�
 
 ### ディレクトリ構成の例
 
-ECサイトのカタログ、在庫、注文という3つのコンテキストを`internal`パッケージで分離してみます。
+EC サイトのカタログ、在庫、注文という3つのコンテキストを`internal`パッケージで分離してみます。
 
 ```text
 myapp/
@@ -132,7 +132,7 @@ type Stock struct {
 }
 ```
 
-カタログコンテキストの`Product`は商品名や説明文を持ちますが、在庫数は知りません。在庫コンテキストの`Stock`はSKUや数量を持ちますが、商品名は知りません。
+カタログコンテキストの`Product`は商品名や説明文を持ちますが、在庫数は知りません。在庫コンテキストの`Stock`は SKU や数量を持ちますが、商品名は知りません。
 
 ### アクセス制御の効果
 
@@ -158,7 +158,7 @@ internal/
 
 この構成なら、`inventory/internal/`は`catalog`からアクセスできず、コンパイルエラーになります。`infra/`はネストした`internal`の**外**に置きます。
 
-Goの`internal`ルールでは「`internal`の親ディレクトリのツリー内からのみインポート可能」とされており、`catalog/internal/`の親は`catalog/`です。そのため`catalog/infra/`からは`catalog/internal/domain/`にアクセスできますが、`inventory/`は`catalog/`のツリー外なのでアクセスできません。コンテキスト間の通信は、`internal`の外に公開APIを設け連携させます。
+Go の`internal`ルールでは「`internal`の親ディレクトリのツリー内からのみインポート可能」とされており、`catalog/internal/`の親は`catalog/`です。そのため`catalog/infra/`からは`catalog/internal/domain/`にアクセスできますが、`inventory/`は`catalog/`のツリー外なのでアクセスできません。コンテキスト間の通信は、`internal`の外に公開 API を設け連携させます。
 
 ---
 
@@ -251,18 +251,18 @@ require myapp/shared v0.0.0
 
 ### internal パッケージとの使い分け
 
-| 観点          | internal パッケージ | Go Workspace                         |
-| ------------- | ------------------- | ------------------------------------ |
-| 分離の粒度    | ディレクトリレベル  | モジュールレベル                     |
-| 依存管理      | 1つの go.mod        | モジュールごとに go.mod              |
-| ローカル開発  | 単一`go.mod`で完結  | 複数モジュールを同時に編集可能       |
-| CI/CDの柔軟性 | 全体を一括テスト    | 変更のあったモジュールだけテスト可能 |
-| 導入コスト    | 低い                | やや高い                             |
-| 推奨規模      | 小〜中規模          | 中〜大規模                           |
+| 観点           | internal パッケージ | Go Workspace                         |
+| -------------- | ------------------- | ------------------------------------ |
+| 分離の粒度     | ディレクトリレベル  | モジュールレベル                     |
+| 依存管理       | 1つの go.mod        | モジュールごとに go.mod              |
+| ローカル開発   | 単一`go.mod`で完結  | 複数モジュールを同時に編集可能       |
+| CI/CD の柔軟性 | 全体を一括テスト    | 変更のあったモジュールだけテスト可能 |
+| 導入コスト     | 低い                | やや高い                             |
+| 推奨規模       | 小〜中規模          | 中〜大規模                           |
 
-小規模なプロジェクトでは`internal`パッケージで十分です。チームが複数に分かれ、各コンテキストの開発サイクルが異なる場合にGo Workspaceへの移行を検討します。特に「チームが独立してデプロイする必要がある」場合は、モジュール分割が有効です。逆に、デプロイが常にモノリシックであれば、`internal`パッケージによるアクセス制御で十分な境界を保てます。
+小規模なプロジェクトでは`internal`パッケージで十分です。チームが複数に分かれ、各コンテキストの開発サイクルが異なる場合に Go Workspace への移行を検討します。特に「チームが独立してデプロイする必要がある」場合は、モジュール分割が有効です。逆に、デプロイが常にモノリシックであれば、`internal`パッケージによるアクセス制御で十分な境界を保てます。
 
-なお、`go.work`がない場合も各モジュールの`go.mod`に`replace`ディレクティブを書けばローカルで複数モジュールを同時編集できます。Go Workspaceの利点は「`replace`を書かずに済む」こと、そして`go.work`を`.gitignore`に追加することで開発者ごとの柔軟性を保てる点にあります。
+なお、`go.work`がない場合も各モジュールの`go.mod`に`replace`ディレクティブを書けばローカルで複数モジュールを同時編集できます。Go Workspace の利点は「`replace`を書かずに済む」こと、そして`go.work`を`.gitignore`に追加することで開発者ごとの柔軟性を保てる点にあります。
 
 ---
 
@@ -398,9 +398,9 @@ func (uc *PlaceOrderInteractor) Execute(ctx context.Context, input PlaceOrderInp
 
 :::message
 
-**Dual Write問題**
+**Dual Write 問題**
 
-`orderRepo.Save`（成功）後に`publisher.Publish`が失敗すると、注文は保存されたのにイベントが発行されません。在庫が減らないまま注文だけが残る状態になります。インメモリのEventBusではこの問題は顕在化しにくいですが、外部メッセージキューを使う場合は注意が必要です。解決策としてはOutboxパターンがあり、注文保存と同一トランザクションでイベントをDBに書き込み、別プロセスで配信します。
+`orderRepo.Save`（成功）後に`publisher.Publish`が失敗すると、注文は保存されたのにイベントが発行されません。在庫が減らないまま注文だけが残る状態になります。インメモリの EventBus ではこの問題は顕在化しにくいですが、外部メッセージキューを使う場合は注意が必要です。解決策としては Outbox パターンがあり、注文保存と同一トランザクションでイベントを DB に書き込み、別プロセスで配信します。
 
 :::
 
@@ -437,7 +437,7 @@ type OrderPlaced struct {
 
 :::
 
-`EventPublisher`/`EventSubscriber`は`shared`に置きます。判断基準は「インターフェースの実装（EventBus等）を複数コンテキストが共有するかどうか」です。EventBusは全コンテキストに注入されるインフラ実装であるため`shared`が適切です。一方、`StockChecker`は在庫コンテキストだけが実装を提供するため、消費者である注文コンテキスト側で定義します。
+`EventPublisher`/`EventSubscriber`は`shared`に置きます。判断基準は「インターフェースの実装（EventBus 等）を複数コンテキストが共有するかどうか」です。EventBus は全コンテキストに注入されるインフラ実装であるため`shared`が適切です。一方、`StockChecker`は在庫コンテキストだけが実装を提供するため、消費者である注文コンテキスト側で定義します。
 
 `PlaceOrderInteractor`は`EventPublisher`を依存性として受け取り、注文保存後にイベントを発行します。購読側の`HandleOrderPlaced`は起動時に`EventSubscriber`経由でハンドラを登録します。
 
@@ -483,7 +483,7 @@ func (h *HandleOrderPlaced) Handle(ctx context.Context, e any) error {
 }
 ```
 
-EventSubscriberの`Subscribe`でハンドラを登録し、同じ`eventBus`を`PlaceOrderInteractor`に注入することで発行〜購読が繋がります。
+EventSubscriber の`Subscribe`でハンドラを登録し、同じ`eventBus`を`PlaceOrderInteractor`に注入することで発行〜購読が繋がります。
 
 ```go
 // cmd/server/main.go（初期化例）
@@ -517,7 +517,7 @@ placeOrder := orderUsecase.NewPlaceOrderInteractor(stockChecker, orderRepo, even
 
 `Handle` の引数に `any` を使うと、コンパイラが型の不整合を検出できません。複数のイベント型を扱う場合は、型スイッチ（`switch e := e.(type) { case *event.OrderPlaced: ... }`）を使うと安全に処理を分岐できます。
 
-Go 1.18+ のジェネリクスを使うと型安全なインターフェースを定義できます。`type TypedHandler[E any] interface { Handle(ctx context.Context, event E) error }` のようなイメージです。ただし、Goのインターフェースはジェネリクスの型パラメータを直接持てないため、実装が複雑になります。実務では型スイッチによる明示的な分岐と、不正な型を受け取った際のエラーログ記録を組み合わせる方法が現実的です。
+Go 1.18+ のジェネリクスを使うと型安全なインターフェースを定義できます。`type TypedHandler[E any] interface { Handle(ctx context.Context, event E) error }` のようなイメージです。ただし、Go のインターフェースはジェネリクスの型パラメータを直接持てないため、実装が複雑になります。実務では型スイッチによる明示的な分岐と、不正な型を受け取った際のエラーログ記録を組み合わせる方法が現実的です。
 
 :::
 
@@ -525,9 +525,9 @@ Go 1.18+ のジェネリクスを使うと型安全なインターフェース�
 
 モノレポでコンテキスト境界を維持するために、私は以下の点を意識しています。
 
-- **内部実装パッケージの直接インポート禁止**: コンテキストの内部実装パッケージ（`domain/`・`usecase/`等）を他コンテキストから直接インポートしないようにします。`event/`や`port/`のような公開APIパッケージ経由でのみ連携します。ネストした`internal`構成であればコンパイラが検出します。より細かいルールを設けたい場合は[`depguard`](https://github.com/OpenPeeDeeP/depguard)などのlintツールをCIに組み込む方法もあります
+- **内部実装パッケージの直接インポート禁止**: コンテキストの内部実装パッケージ（`domain/`・`usecase/`等）を他コンテキストから直接インポートしないようにします。`event/`や`port/`のような公開 API パッケージ経由でのみ連携します。ネストした`internal`構成であればコンパイラが検出します。より細かいルールを設けたい場合は[`depguard`](https://github.com/OpenPeeDeeP/depguard)などの lint ツールを CI に組み込む方法もあります
 - **共有は最小限に**: `shared`パッケージには値オブジェクト（`Money`など）とインフラ横断インターフェースのみを配置します。ドメインインターフェースは消費者コンテキストが定義します。ただし`EventPublisher`/`EventSubscriber`のようにインフラ実装を複数コンテキストが共有する場合は`shared`が適切です。ドメインイベントは発行元コンテキストが所有し、他コンテキストから参照できる公開パッケージに置きます。
-- **IDでの参照**: コンテキスト間でエンティティを参照する場合は、構造体の直接参照ではなくIDを使います
+- **ID での参照**: コンテキスト間でエンティティを参照する場合は、構造体の直接参照ではなく ID を使います
 - **命名の独立性**: 各コンテキストで同じ概念（商品、ユーザー等）に異なる名前を付けることを恐れないようにします。カタログの`Product`と在庫の`Stock`は別の型です
 
 ---
@@ -538,10 +538,10 @@ Go 1.18+ のジェネリクスを使うと型安全なインターフェース�
 | --- | --- | --- |
 | モデルの分離 | コンテキストごとにドメインモデルを定義する | 各モデルが必要な属性だけを持つ |
 | アクセス制御 | `internal`パッケージで公開範囲を制限する | コンパイラレベルで依存を制御できる |
-| モジュール独立性 | Go Workspaceで各コンテキストを独立モジュールにする | ビルド・テストの独立性が高まる |
+| モジュール独立性 | Go Workspace で各コンテキストを独立モジュールにする | ビルド・テストの独立性が高まる |
 | コンテキスト間連携 | 共有インターフェースまたはドメインイベントを使う | 結合度を最小限に保てる |
 
-境界づけられたコンテキストは、DDDの中でも特に実務的な価値が高い概念です。Goの`internal`パッケージやGo Workspaceは、この概念をコードレベルで強制する手段として機能します。まずは`internal`パッケージで始め、プロジェクトの成長に合わせてGo Workspaceへの移行を検討するのがおすすめです。
+境界づけられたコンテキストは、DDD の中でも特に実務的な価値が高い概念です。Go の`internal`パッケージや Go Workspace は、この概念をコードレベルで強制する手段として機能します。まずは`internal`パッケージで始め、プロジェクトの成長に合わせて Go Workspace への移行を検討するのがおすすめです。
 
 なお、外部モデルを自コンテキストのモデルへ変換する**腐敗防止層**は、第12章で解説しています。
 

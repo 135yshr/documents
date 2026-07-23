@@ -3,7 +3,7 @@
   "checkpoint_id": "61bdea29cd95",
   "strategy": "manual-commit",
   "branch": "book/go-service-design",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "books/go-service-design/architecture-comparison.md",
     "books/go-service-design/dependency-rule.md",
@@ -36,13 +36,20 @@
       "compact_transcript": "/61/bdea29cd95/2/transcript.jsonl",
       "content_hash": "/61/bdea29cd95/2/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/61/bdea29cd95/3/metadata.json",
+      "transcript": "/61/bdea29cd95/3/full.jsonl",
+      "compact_transcript": "/61/bdea29cd95/3/transcript.jsonl",
+      "content_hash": "/61/bdea29cd95/3/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
-    "input_tokens": 58144,
-    "cache_creation_tokens": 507691,
-    "cache_read_tokens": 1736420,
-    "output_tokens": 39809,
-    "api_call_count": 32
+    "input_tokens": 77434,
+    "cache_creation_tokens": 701894,
+    "cache_read_tokens": 2195435,
+    "output_tokens": 53878,
+    "api_call_count": 40
   }
 }

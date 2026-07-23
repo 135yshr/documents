@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "6be5580b2fe8",
+  "strategy": "manual-commit",
+  "branch": "worktree-flickering-soaring-quill",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "books/go-service-design/value-objects.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6b/e5580b2fe8/0/metadata.json",
+      "transcript": "/6b/e5580b2fe8/0/full.jsonl",
+      "compact_transcript": "/6b/e5580b2fe8/0/transcript.jsonl",
+      "content_hash": "/6b/e5580b2fe8/0/content_hash.txt",
+      "prompt": "/6b/e5580b2fe8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 935,
+    "cache_read_tokens": 415800,
+    "output_tokens": 1874,
+    "api_call_count": 5
+  }
+}

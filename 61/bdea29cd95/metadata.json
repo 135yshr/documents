@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "61bdea29cd95",
+  "strategy": "manual-commit",
+  "branch": "book/go-service-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "books/go-service-design/architecture-comparison.md",
+    "books/go-service-design/dependency-rule.md",
+    "books/go-service-design/domain-events.md",
+    "books/go-service-design/enforce-dependency-rule.md",
+    "books/go-service-design/handson-design.md",
+    "books/go-service-design/handson-implementation.md",
+    "books/go-service-design/interface-design.md",
+    "books/go-service-design/testing-strategy.md",
+    "books/go-service-design/usecase-layer.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/61/bdea29cd95/0/metadata.json",
+      "transcript": "/61/bdea29cd95/0/full.jsonl",
+      "compact_transcript": "/61/bdea29cd95/0/transcript.jsonl",
+      "content_hash": "/61/bdea29cd95/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 19429,
+    "cache_creation_tokens": 211032,
+    "cache_read_tokens": 767516,
+    "output_tokens": 17713,
+    "api_call_count": 13
+  }
+}

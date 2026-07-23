@@ -634,6 +634,3 @@ func (h *PointHandler) Handle(ctx context.Context, e event.Event) error {
 | 結果整合性 | Werner Vogels, [Eventually Consistent](https://dl.acm.org/doi/10.1145/1435417.1435432) |
 | NATS メッセージング | NATS Authors, [NATS Documentation](https://docs.nats.io/) |
 | RabbitMQ | RabbitMQ Team, [RabbitMQ Documentation](https://www.rabbitmq.com/docs) |
-
-</content>
-</invoke>

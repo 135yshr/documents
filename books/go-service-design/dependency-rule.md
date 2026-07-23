@@ -188,9 +188,9 @@ type OrderService struct {
 
 ---
 
-## Go の interface による自然な DIP 実現
+## Goのinterfaceによる自然なDIP実現
 
-ここからは、これまで説明してきた「依存関係を内側に向ける」という原則を、Goにおいてどのように表現しやすいかについて説明します。以降の内容はクリーンアーキテクチャそのものの定義ではなく、Goの言語特性を活かした実装パターンの一例です。
+ここからは、これまで説明してきた「依存関係を内側に向ける」原則を、Goがどのように表現しやすくしているかを見ていきます。以降の内容はクリーンアーキテクチャそのものの定義ではなく、Goの言語特性を活かした実装パターンの一例です。
 
 多くの言語ではDIPの実現に明示的なinterfaceの宣言と実装が必要です。一方、Goでは **implicit interface（暗黙的なinterface満足）** という特性があります。
 
@@ -345,6 +345,3 @@ Goのimplicit interfaceは、DIPを実現しやすい強力な仕組みです。
 | Go Code Review Comments | Go Wiki, [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments#interfaces) |
 | Go Proverbs | Rob Pike, [Go Proverbs](https://go-proverbs.github.io/) |
 | Hexagonal Architecture | Alistair Cockburn, [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/) |
-
-</content>
-</invoke>

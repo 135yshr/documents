@@ -64,7 +64,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 ### 冪等性チェックの追加
 
-分析処理で、同じユーザーを二重に分析しないためのチェックが必要になりました。APIのリトライや再操作で同じリクエストが複数回送られると、処理が重複してコストが無駄になります。既存の分析結果があればそれを返すことで、無駄な処理を防ぎます。
+分析処理で、同じユーザーを二重に分析しないためのチェックが必要になりました。APIのリトライや再操作で同じリクエストが複数回送られると、処理が重複して余計なコストがかかります。既存の分析結果があればそれを返すことで、重複した処理を防げます。
 
 ```go
 // usecase/analyze_user.go
@@ -389,6 +389,3 @@ UseCase層は「すべての機能に必要」です。複雑さは機能によ�
 | Goのシンプルさの哲学 | Rob Pike, [Simplicity is Complicated](https://go.dev/talks/2015/simplicity-is-complicated.slide) |
 | Vertical Slice Architecture（本章とは異なるアプローチだが、層の要否を考える際の対比として参考になる） | Jimmy Bogard, [Vertical Slice Architecture](https://www.jimmybogard.com/vertical-slice-architecture/) |
 | DDDの戦術的設計 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
-
-</content>
-</invoke>

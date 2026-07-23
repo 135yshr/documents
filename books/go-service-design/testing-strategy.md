@@ -340,7 +340,7 @@ func TestPricingService_CalculateTotal(t *testing.T) {
 
 ### モックライブラリを使わない理由
 
-Mitchell Hashimoto の講演 [Advanced Testing with Go](https://www.youtube.com/watch?v=8hQG7QlcLBk) でも紹介されていますが、Go の標準ライブラリはモックライブラリを使いません。テストファイル内にスタブ構造体を定義しています。本章でも同じスタイルを採用しています。理由は次のとおりです。
+Mitchell Hashimoto の講演 [Advanced Testing with Go](https://www.youtube.com/watch?v=8hQG7QlcLBk) でも紹介されているとおり、Go の標準ライブラリはモックライブラリを使いません。テストファイル内にスタブ構造体を定義しています。本章でも同じスタイルを採用しています。理由は次のとおりです。
 
 - **Go のinterfaceは暗黙的**に満たされるため、テスト用のスタブを簡単に作成できます
 - **interfaceが小さい**（1〜2メソッド）場合、モック生成ツールのオーバーヘッドが利点を上回ります

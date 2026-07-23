@@ -4,7 +4,7 @@ title: "依存性ルールをCIで守る〜静的解析による自動チェッ�
 
 ## はじめに
 
-クリーンアーキテクチャの最も重要なルールは「依存性は常に内側に向かう」という**依存性ルール**です。しかし、コードレビューで依存方向を目視チェックするのは限界があります。チームが大きくなるほど、うっかり外側のレイヤーをimportしてしまう事故は増えていきます。
+クリーンアーキテクチャの最も重要なルールは「依存性は常に内側に向かう」という**依存性ルール**です。しかし、コードレビューで依存方向を目視でチェックするには限界があります。チームが大きくなるほど、うっかり外側のレイヤーをimportしてしまう事故は増えていきます。
 
 私のチームでも、domain層からinfrastructure層のパッケージをimportしてしまうPRが月に数回発生していました。レビューで気づけば良いのですが、見落とすとアーキテクチャの崩壊が静かに進行します。
 
@@ -373,6 +373,3 @@ deny:
 | golangci-lint | [golangci-lint 公式ドキュメント](https://golangci-lint.run/) |
 | ArchUnit（JVM版） | [ArchUnit 公式サイト](https://www.archunit.org/) |
 | GitHub Actions ステータスチェック | [GitHub Docs - Protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) |
-
-</content>
-</invoke>

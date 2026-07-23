@@ -14,9 +14,9 @@ Goでクリーンアーキテクチャを導入したとき、私が最初にぶ
 
 Repository、InputPort、OutputPort、UseCase、Presenter…レイヤーごとにinterfaceと実装のペアが増殖しました。1つの機能を追加するのに何ファイルも触る状態でした。
 
-しかし運用を続ける中で、**interfaceの数そのものは問題ではない**と分かりました。本当の問題は**1つのinterfaceが太すぎること**と、**Go の言語特性を活かせていないこと**でした。
+しかし運用を続ける中で、**interfaceの数そのものは問題ではない**と分かりました。本当の問題は**1つのinterfaceが太すぎること**と、**Goの言語特性を活かせていないこと**でした。
 
-この章では、教科書通りに作った設計を**Go の思想で見直すプロセス**を共有します。
+この章では、教科書通りに作った設計を**Goの思想で見直すプロセス**を共有します。
 
 ---
 
@@ -60,15 +60,15 @@ type BatchAnalyzeInputPort interface {
 }
 ```
 
-この設計は**動きます**。テスタビリティも高く、レイヤー間の依存方向も正しく保たれています。しかし運用を続ける中で、**Go の思想とのズレ**に気づきました。
+この設計は**動きます**。テスタビリティも高く、レイヤー間の依存方向も正しく保たれています。しかし運用を続ける中で、**Goの思想とのズレ**に気づきました。
 
 ---
 
-## Go の思想との3つのズレ
+## Goの思想との3つのズレ
 
 ### ズレ1：interfaceを「提供側」が定義している
 
-Go の公式 Wiki にはこう書かれています。
+Goの公式 Wiki にはこう書かれています。
 
 > Go interfaces generally belong in the package that uses values of the interface type, not the package that implements those values.
 >
@@ -76,17 +76,17 @@ Go の公式 Wiki にはこう書かれています。
 
 私の設計では、`usecase/port/input/`にinterfaceを定義し、それをHandler層が参照していました。つまり**interfaceを提供側が定義する**Java/C#的なアプローチです。
 
-Go では**利用側がinterfaceを定義する**のが慣習です。`io.Reader`はデータを読む側のパッケージで定義されており、`os.File`はその存在を知りません。
+Goでは**利用側がinterfaceを定義する**のが慣習です。`io.Reader`はデータを読む側のパッケージで定義されており、`os.File`はその存在を知りません。
 
 ### ズレ2：interfaceが「大きすぎる」
 
-Go の作者 Rob Pike はこう述べています。
+Goの作者 Rob Pike はこう述べています。
 
 > The bigger the interface, the weaker the abstraction.
 >
 > — [Go Proverbs](https://go-proverbs.github.io/)
 
-Go 標準ライブラリのinterfaceはほとんどが1〜2メソッドです。
+Go標準ライブラリのinterfaceはほとんどが1〜2メソッドです。
 
 | interface        | メソッド数 |
 | ---------------- | ---------- |
@@ -97,7 +97,7 @@ Go 標準ライブラリのinterfaceはほとんどが1〜2メソッドです。
 | `http.Handler`   | 1          |
 | `sort.Interface` | 3          |
 
-私のRepository interfaceは5〜8メソッドありました。Go の基準では「太い」interfaceでした。
+私のRepository interfaceは5〜8メソッドありました。Goの基準では「太い」interfaceでした。
 
 ### ズレ3：「将来のため」のinterfaceが残っている
 
@@ -113,7 +113,7 @@ type getTaskResultsInteractor struct {
 }
 ```
 
-Go コミュニティではこれを**Preemptive Interface（先回りinterface）**と呼び、アンチパターンとされています。
+Goコミュニティではこれを**Preemptive Interface（先回りinterface）**と呼び、アンチパターンとされています。
 
 > A great rule of thumb for Go is accept interfaces, return structs.
 >
@@ -166,7 +166,7 @@ type TaskHandler struct {
 }
 ```
 
-`AnalyzeTaskInteractor`は`taskAnalyzer` interfaceの存在を知りません。Go のimplicit interface（暗黙的なinterface満足）により、自動的にinterfaceを満たします。
+`AnalyzeTaskInteractor`は`taskAnalyzer` interfaceの存在を知りません。Goのimplicit interface（暗黙的なinterface満足）により、自動的にinterfaceを満たします。
 
 ### Interactor同士の組み合わせも同様
 
@@ -199,7 +199,7 @@ type TaskClassifierPort interface {
 
 Output Portを残す理由は、**実装が実際に差し替わる**からです。私のプロジェクトでは、分析ロジックを「キーワードマッチング → 機械学習ベースの分類」に段階的に移行しました。Output Portが分離されていたため、新しい実装を追加するだけで移行できました。
 
-ただし、Go の思想に厳密に従うなら、Output Port も利用側（Interactor）で定義する方法があります。
+ただし、Goの思想に厳密に従うなら、Output Port も利用側（Interactor）で定義する方法があります。
 
 ```go
 // usecase/analyze_task_interactor.go
@@ -241,7 +241,7 @@ type TaskResultRepository interface {
 }
 ```
 
-Go の基準では太すぎます。そこで**Reader / Writer に分離**しました。
+Goの基準では太すぎます。そこで**Reader / Writer に分離**しました。
 
 ```go
 // domain/repository/task_result_repository.go
@@ -347,7 +347,7 @@ c.Provide(usecase.NewAnalyzeTaskInteractor, dig.As(new(input.AnalyzeTaskInputPor
 c.Provide(usecase.NewAnalyzeTaskInteractor)
 ```
 
-どちらの場合も、Handler側でinterfaceを定義しているため、structを渡しても暗黙的にinterfaceを満たします。これがGo のimplicit interfaceの強みです。
+どちらの場合も、Handler側でinterfaceを定義しているため、structを渡しても暗黙的にinterfaceを満たします。これがGoのimplicit interfaceの強みです。
 
 ### 「interfaceファイルが各Handlerに散らばって管理しづらくないか」
 
@@ -377,16 +377,16 @@ type TaskHandler struct {
 
 ## まとめ
 
-| 処方箋 | 内容 | Go の根拠 |
+| 処方箋 | 内容 | Goの根拠 |
 | --- | --- | --- |
 | 1. Input Port廃止 | 利用側でinterfaceを定義する | "Accept interfaces, return structs" |
 | 2. Output Port精査 | 共有interfaceのみ残す | 実装差し替えの実績がある場合のみ |
 | 3. Repository分離 | Reader / Writerに分ける | "The bigger the interface, the weaker the abstraction" |
 | 4. ディレクトリ整理 | port/input/ を廃止する | interfaceは利用側のパッケージに属する |
 
-教科書通りのPorts & Adaptersを導入した当初は「きれいに分離できた」と満足していました。しかしGo の思想を学ぶ中で、**interfaceの数を減らすのではなく、各interfaceを正しい場所に置く**ことが本質だと気づきました。
+教科書通りのPorts & Adaptersを導入した当初は「きれいに分離できた」と満足していました。しかしGoの思想を学ぶ中で、**interfaceの数を減らすのではなく、各interfaceを正しい場所に置く**ことが本質だと気づきました。
 
-Go のimplicit interfaceは、「提供側がinterfaceを定義しなくても依存性逆転ができる」という強力な仕組みです。この仕組みを活かすことで、interfaceの爆発を防ぎつつ、テスタビリティと保守性を両立できます。
+Goのimplicit interfaceは、「提供側がinterfaceを定義しなくても依存性逆転ができる」という強力な仕組みです。この仕組みを活かすことで、interfaceの爆発を防ぎつつ、テスタビリティと保守性を両立できます。
 
 ---
 

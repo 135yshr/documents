@@ -89,7 +89,7 @@ internal/
 
 ## 依存性逆転の原則（DIP）こそが本質
 
-同心円図で本当に伝えたいことは、**依存性の矢印がすべて内側を向いている**という点です。これを支えているのが、SOLID の「D」にあたる**依存性逆転の原則（Dependency Inversion Principle: DIP）**です。
+同心円図で本当に伝えたいことは、**依存性の矢印がすべて内側を向いている**という点です。これを支えているのが、SOLID の「D」にあたる **依存性逆転の原則（Dependency Inversion Principle: DIP）** です。
 
 > A. High-level modules should not depend on low-level modules. Both should depend on abstractions. B. Abstractions should not depend on details. Details should depend on abstractions.
 >

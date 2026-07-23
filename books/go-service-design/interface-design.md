@@ -113,7 +113,7 @@ type getTaskResultsInteractor struct {
 }
 ```
 
-Go コミュニティではこれを**Preemptive Interface（先回り interface）**と呼び、アンチパターンとされています。
+Go コミュニティではこれを **Preemptive Interface（先回り interface）** と呼び、アンチパターンとされています。
 
 > A great rule of thumb for Go is accept interfaces, return structs.
 >

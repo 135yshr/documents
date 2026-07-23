@@ -370,7 +370,7 @@ func (t *Task) TransitionTo(next TaskStatus) error {
 
 ## 多層防御としてのバリデーション戦略
 
-3層のバリデーションを組み合わせることで、**多層防御（Defense in Depth）**が実現します。
+3層のバリデーションを組み合わせることで、**多層防御（Defense in Depth）** が実現します。
 
 ```mermaid
 flowchart LR

@@ -1,0 +1,26 @@
+title: "Go の設計、どこまでやる？〜小さく作って、壊さず育てる〜"
+summary: "「クリーンアーキテクチャというアーキテクチャはない」——大事なのは図の形を真似ることではなく、依存の向きを設計し、変更に強いサービスを育てることです。本書は、Go でサービスを設計・運用する中で得た判断基準を、原則の理解、層ごとの設計判断、ドメインの表現、CI での維持、そして読書ログサービスを題材にしたハンズオンまで一冊にまとめました。読み終えたとき、自分のサービスを設計して作りはじめられる状態になることがゴールです。"
+topics: ["go", "cleanarchitecture", "ddd", "設計", "アーキテクチャ"]
+published: false
+price: 0
+chapters:
+  - intro
+  - dependency-rule
+  - interface-design
+  - architecture-comparison
+  - usecase-layer
+  - repository-levels
+  - error-handling
+  - validation-design
+  - value-objects
+  - aggregate-invariants
+  - domain-events
+  - anti-corruption-layer
+  - module-structure
+  - di-composition-root
+  - transaction-management
+  - testing-strategy
+  - enforce-dependency-rule
+  - handson-design
+  - handson-implementation
+  - conclusion

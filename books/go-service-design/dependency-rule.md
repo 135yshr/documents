@@ -1,5 +1,5 @@
 ---
-title: "クリーンアーキテクチャの同心円図が伝えきれないこと〜本当に大事な依存性の方向〜"
+title: "依存性ルール〜同心円図の正しい読み方〜"
 ---
 
 ## はじめに
@@ -236,7 +236,7 @@ func (r *postgresOrderRepository) FindByID(ctx context.Context, id string) (*Ord
 
 ### 利用側でinterfaceを定義するパターン
 
-さらにGoらしいアプローチとして、interfaceを**利用する側**で定義する方法があります。このパターンの実践的な適用例は、第3章「Goでinterfaceが爆発する問題への処方箋」の処方箋1で詳しく解説しています。
+さらにGoらしいアプローチとして、interfaceを**利用する側**で定義する方法があります。このパターンの実践的な適用例は、第3章「Goのinterface設計」の処方箋1で詳しく解説しています。
 
 ```go
 // usecase/create_order.go

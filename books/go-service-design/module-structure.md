@@ -1,5 +1,5 @@
 ---
-title: "境界づけられたコンテキストをGoのモジュール構成に落とし込む"
+title: "モジュール構成〜境界づけられたコンテキストをGoに落とし込む〜"
 ---
 
 ## はじめに
@@ -384,7 +384,7 @@ func (uc *PlaceOrderInteractor) Execute(ctx context.Context, input PlaceOrderInp
 
 :::message
 
-`NewOrder`の実装と不変条件の詳細は第10章「非公開フィールドで集約の不変条件を守る」を参照してください。
+`NewOrder`の実装と不変条件の詳細は第10章「集約の不変条件」を参照してください。
 
 :::
 

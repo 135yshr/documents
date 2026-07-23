@@ -1,5 +1,5 @@
 ---
-title: "GoのRepositoryパターン再考〜DB依存を剥がすのはどこまで必要か〜"
+title: "Repositoryの抽象化レベル〜DB依存をどこまで剥がすか〜"
 ---
 
 ## はじめに
@@ -46,7 +46,7 @@ graph LR
 
 ### レベル1：完全抽象（ドメイン層にinterface定義）
 
-教科書的なDDDのアプローチです。ドメイン層にRepository interfaceを定義し、infrastructure層で実装します。Go の「利用側で interface を定義する」慣習に従い、usecase 層の各 Interactor が必要なメソッドだけを持つ小さな interface を定義する方法と併用できます。本章では Reader/Writer の分離を `domain/repository` に置く例を示します。Interactor ごとにさらに絞り込む方法は、第3章「Goでinterfaceが爆発する問題への処方箋」で詳しく解説しています。
+教科書的なDDDのアプローチです。ドメイン層にRepository interfaceを定義し、infrastructure層で実装します。Go の「利用側で interface を定義する」慣習に従い、usecase 層の各 Interactor が必要なメソッドだけを持つ小さな interface を定義する方法と併用できます。本章では Reader/Writer の分離を `domain/repository` に置く例を示します。Interactor ごとにさらに絞り込む方法は、第3章「Goのinterface設計」で詳しく解説しています。
 
 ```go
 // domain/repository/task_repository.go

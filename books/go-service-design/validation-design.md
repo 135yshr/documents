@@ -1,5 +1,5 @@
 ---
-title: "入力バリデーション設計〜ドメイン層で何を守り、何を外に任せるか〜"
+title: "入力バリデーション設計〜3層での役割分担〜"
 ---
 
 ## はじめに
@@ -173,7 +173,7 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
 ```
 
-Save時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義されたセンチネルエラー`model.ErrDuplicateTitle`を返します。第7章「エラーハンドリング設計〜ドメインエラーとインフラエラーを分離する〜」で述べたとおり、Repository層はドメインのセンチネルエラーを返し、インフラ固有のエラーはアダプター内で変換します。
+Save時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義されたセンチネルエラー`model.ErrDuplicateTitle`を返します。第7章「エラーハンドリング設計」で述べたとおり、Repository層はドメインのセンチネルエラーを返し、インフラ固有のエラーはアダプター内で変換します。
 
 Cockburnの[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これはdriven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースがdriven Port、`infrastructure/postgres`のDB実装がdriven Adapterにあたります。一方、REST handlerはdriving side（外部がアプリケーションを駆動する側）のAdapterです。driven AdapterがDBエラーを吸収し、driven Portを通じてドメイン側が理解できるエラーを返します。
 
@@ -442,7 +442,7 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 ## バリデーションエラーの設計
 
-各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第7章「エラーハンドリング設計〜ドメインエラーとインフラエラーを分離する〜」ではセンチネルエラーと`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
+各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第7章「エラーハンドリング設計」ではセンチネルエラーと`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
 
 ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のようなHTTPリクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDDの文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martinの[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
 

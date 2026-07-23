@@ -1,5 +1,5 @@
 ---
-title: "Goでinterfaceが爆発する問題への処方箋"
+title: "Goのinterface設計〜利用側で定義し、小さく保つ〜"
 ---
 
 ## はじめに
@@ -123,7 +123,7 @@ Go コミュニティではこれを**Preemptive Interface（先回りinterface�
 
 ## 処方箋1：Input Portを廃止し、利用側でinterfaceを定義する
 
-最も効果が大きかった改善です。`usecase/port/input/`ディレクトリを廃止し、interfaceを**利用側**で定義するようにしました。このパターンがDIP（依存性逆転の原則）とどう結びつくかは第2章「クリーンアーキテクチャの同心円図が伝えきれないこと」で解説しています。
+最も効果が大きかった改善です。`usecase/port/input/`ディレクトリを廃止し、interfaceを**利用側**で定義するようにしました。このパターンがDIP（依存性逆転の原則）とどう結びつくかは第2章「依存性ルール」で解説しています。
 
 ### Before：提供側でInput Portを定義
 

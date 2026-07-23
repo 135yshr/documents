@@ -1,0 +1,135 @@
+{
+  "cli_version": "0.8.1",
+  "checkpoint_id": "ba4b89682324",
+  "session_id": "c8c9e5b0-ec68-4ef6-8e8c-fbaed2d6c8be",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-23T01:22:39.5162Z",
+  "branch": "book/go-service-design",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "books/go-service-design/dependency-rule.md",
+    "books/go-service-design/domain-events.md",
+    "books/go-service-design/handson-design.md",
+    "books/go-service-design/interface-design.md",
+    "books/go-service-design/module-structure.md",
+    "books/go-service-design/validation-design.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "e01aa34814e4",
+  "checkpoint_transcript_start": 1207,
+  "transcript_lines_at_start": 1207,
+  "compact_transcript_start": 302,
+  "token_usage": {
+    "input_tokens": 147,
+    "cache_creation_tokens": 9028,
+    "cache_read_tokens": 3884497,
+    "output_tokens": 6542,
+    "api_call_count": 9
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-review-doc-2026-07-23T00:49:12.543793Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "review-doc"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "8d3d1e85e06e",
+      "timestamp": "2026-07-23T00:49:12.543793Z",
+      "native": {
+        "command": "/review-doc"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/review-doc",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "prompt-skill-claude-code-review-doc-2026-07-23T00:49:31.218463Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "review-doc"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "81e36df0a2c1",
+      "timestamp": "2026-07-23T00:49:31.218463Z",
+      "native": {
+        "command": "/review-doc"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/review-doc",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_0153C3wDxnQFj3UrLHDiFwVu",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "stop-ai-slop-jp"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "e01aa34814e4",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 144,
+        "end": 145,
+        "entry_ids": [
+          "5ad21945-0910-4a8e-9620-3e7c1fffe9db"
+        ],
+        "tool_use_id": "toolu_0153C3wDxnQFj3UrLHDiFwVu"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_0153C3wDxnQFj3UrLHDiFwVu"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: stop-ai-slop-jp",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-23T01:22:39.34422Z",
+    "agent_lines": 6,
+    "agent_removed": 6,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 6,
+    "total_lines_changed": 12,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 83,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 83
+      }
+    }
+  ]
+}

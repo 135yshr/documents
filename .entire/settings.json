@@ -1,4 +1,4 @@
 {
-  "enabled": true,
-  "telemetry": true
+  "enabled": false,
+  "telemetry": false
 }

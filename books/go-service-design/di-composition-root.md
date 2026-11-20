@@ -40,11 +40,11 @@ graph TD
 手動 DI の実体は、コンストラクタ関数の呼び出しを依存の順に並べることです。
 
 ```go
-// cmd/server/main.go
-func main() {
+// cmd/server/main.go。コンストラクタなどの詳細は省略しています。
+func run() error {
     db, err := sql.Open("pgx", os.Getenv("DATABASE_URL"))
     if err != nil {
-        log.Fatal(err)
+        return err
     }
     defer db.Close()
 
@@ -63,9 +63,18 @@ func main() {
     mux.HandleFunc("POST /orders", orderHandler.Create)
     mux.HandleFunc("GET /orders/{id}", orderHandler.Get)
 
-    log.Fatal(http.ListenAndServe(":8080", mux))
+    return http.ListenAndServe(":8080", mux)
+}
+
+func main() {
+    if err := run(); err != nil {
+        log.Print(err)
+        os.Exit(1)
+    }
 }
 ```
+
+`run` が戻ってから終了コードを設定するため、`defer db.Close()` が実行されます。実際のサービスでは、後述するように受付停止と進行中の処理の完了も待ちます。
 
 利点は3つあります。
 
@@ -75,7 +84,7 @@ func main() {
 
 ### interface 満足の検証もここに置く
 
-第2章で紹介した`var _`イディオムの置き場所も、コンポジションルートです。
+第12章「Go の interface 設計」で紹介した`var _`イディオムの置き場所の一例が、コンポジションルートです。
 
 ```go
 // cmd/server/main.go
@@ -110,6 +119,70 @@ userHandler := userdi.NewUserHandler(db)
 ```
 
 `main`はモジュールをまたぐ資源（DB 接続、設定、ロガー）の生成と、モジュール組み立て関数の呼び出しだけになります。この形なら、モジュールが10個あっても`main`は数十行に収まります。
+
+---
+
+## logger、tracer、Worker の配線と停止
+
+DB と同様に、`slog.Logger` と OpenTelemetry の tracer provider は外側で設定します。各コンストラクタに必要な logger や tracer を渡し、Domain Entity には渡しません。たとえば、次のように配線します。
+
+```go
+logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+// 設定済みの tracer provider は exporter とともに起動時に生成します。
+tracer := tracerProvider.Tracer("book-service")
+repo := postgres.NewBookRepository(db)
+lookup := usecase.NewLookupBook(repo, tracer)
+handler := httpadapter.NewBookHandler(lookup, logger)
+worker := jobs.NewWorker(repo, logger, tracer)
+```
+
+この断片では provider の設定とコンストラクタの実装を省略しています。Worker の開始・停止と待ち合わせもコンポジションルートの責任です。リクエストに紐づく goroutine と Worker の寿命の違いは第18章、計装の粒度は第20章で扱います。
+
+終了シグナルを受けたら、新しい受付を止め、進行中の HTTP 処理を drain します。HTTP 処理が Worker に依存する場合は、その後に Worker をキャンセルして完了を待ちます。最後に DB を閉じ、テレメトリーを flush して provider を停止します。次の例は、アプリケーションが追跡するすべてのハンドラの完了を `handlersDone`、Worker の完了を `workerDone` のクローズで知らせる構成です。
+
+```go
+func stop(
+    server *http.Server,
+    handlersDone <-chan struct{},
+    cancelWorker context.CancelFunc,
+    workerDone <-chan struct{},
+    db *sql.DB,
+    shutdownTelemetry func(context.Context) error,
+) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+
+    var errs []error
+    if err := server.Shutdown(ctx); err != nil {
+        errs = append(errs, err)
+        if err := server.Close(); err != nil {
+            errs = append(errs, err)
+        }
+    }
+    select {
+    case <-handlersDone:
+    case <-ctx.Done():
+        cancelWorker()
+        return errors.Join(append(errs, ctx.Err())...)
+    }
+    cancelWorker()
+    select {
+    case <-workerDone:
+    case <-ctx.Done():
+        // 使用中の資源を閉じず、呼び出し側で強制終了を判断します。
+        return errors.Join(append(errs, ctx.Err())...)
+    }
+    if err := db.Close(); err != nil {
+        errs = append(errs, err)
+    }
+    if err := shutdownTelemetry(ctx); err != nil {
+        errs = append(errs, err)
+    }
+    return errors.Join(errs...)
+}
+```
+
+シグナルの Context はすでにキャンセルされているため、終了処理には独立した期限を使います。ハンドラの追跡は別途実装し、受付停止後に新しいハンドラが追加されないことを保証します。ハイジャックした接続も別途管理します。この例の `shutdownTelemetry` は provider の shutdown を呼ぶ関数です。複数 provider があればそれぞれ停止します。期限を共有するため HTTP の drain が長引くと、送信時間を確保できないことがあります。運用に応じて段階ごとの時間を確保し、停止失敗を報告します。`db.Close` 自体は Context による期限を受け取らないため、残りの終了猶予も考慮します。ハンドラや Worker が停止しない場合は資源を使用中のまま閉じず、終了猶予と強制終了の方針に従います。
 
 ---
 
@@ -180,6 +253,7 @@ err := c.Invoke(func(h *handler.OrderHandler) {
 - 手動 DI から始めます。コンパイル時検証、可読性、学習コストのバランスが最もよいからです
 - 肥大化にはまずモジュールごとの組み立て関数で対処し、それでも足りなければ wire を導入します
 - 実行時解決の DI コンテナは、コンパイル時検証を手放すコストに見合う理由があるときだけ選びます
+- logger、tracer、Worker の寿命も外側で管理し、利用者の停止を待ってから共有資源を閉じます
 
 ---
 

@@ -123,7 +123,7 @@ Go コミュニティではこれを **Preemptive Interface（先回り interfac
 
 ## 処方箋1：Input Port を廃止し、利用側で interface を定義する
 
-最も効果が大きかった改善です。`usecase/port/input/`ディレクトリを廃止し、interface を**利用側**で定義するようにしました。このパターンが DIP（依存性逆転の原則）とどう結びつくかは第2章「依存性ルール」で解説しています。
+最も効果が大きかった改善です。`usecase/port/input/`ディレクトリを廃止し、interface を**利用側**で定義するようにしました。このパターンが DIP（依存性逆転の原則）とどう結びつくかは第3章「依存性ルール」で解説しています。
 
 ### Before：提供側で Input Port を定義
 

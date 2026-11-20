@@ -173,7 +173,7 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
 ```
 
-Save 時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義された sentinel error `model.ErrDuplicateTitle` を返します。第7章「エラーハンドリング設計」で述べたとおり、Repository 層はドメインの sentinel error を返し、インフラ固有のエラーはアダプター内で変換します。
+Save 時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義された sentinel error `model.ErrDuplicateTitle` を返します。第16章「エラーハンドリング設計」でも扱うように、Repository 層はドメインの sentinel error を返し、インフラ固有のエラーはアダプター内で変換します。
 
 Cockburn の[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これは driven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースが driven Port、`infrastructure/postgres`の DB 実装が driven Adapter にあたります。一方、REST handler は driving side（外部がアプリケーションを駆動する側）の Adapter です。driven Adapter が DB エラーを吸収し、driven Port を通じてドメイン側が理解できるエラーを返します。
 
@@ -204,7 +204,7 @@ UseCase 層でチェックすべき項目は以下の通りです。
 
 値オブジェクトのコンストラクタでバリデーションを行うことで、**不正な値がシステム内に存在できない**ことを保証します。Evans（DDD, Chapter 5）は値オブジェクトの不変性と自己完結的な検証について論じています。本章の設計はその考え方に基づいています。
 
-バリデーションが必要な値オブジェクトには、Named Type（`type X string`）ではなく struct + New 関数パターンを使います（第9章）。struct の非公開フィールドにより、コンストラクタを経由しない値の生成を防げます。
+バリデーションが必要な値オブジェクトには、Named Type（`type X string`）ではなく struct + New 関数パターンを使います（第7章）。struct の非公開フィールドにより、コンストラクタを経由しない値の生成を防げます。
 
 ```go
 // domain/model/priority.go
@@ -442,7 +442,7 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 ## バリデーションエラーの設計
 
-各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第7章「エラーハンドリング設計」では sentinel error と`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
+各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第16章「エラーハンドリング設計」では sentinel error と`CodedError`パターンを紹介します。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
 
 ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のような HTTP リクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDD の文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martin の[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
 

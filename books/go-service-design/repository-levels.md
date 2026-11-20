@@ -46,7 +46,7 @@ graph LR
 
 ### レベル1：完全抽象（ドメイン層に interface 定義）
 
-教科書的な DDD のアプローチです。ドメイン層に Repository interface を定義し、infrastructure 層で実装します。Go の「利用側で interface を定義する」慣習に従い、usecase 層の各 Interactor が必要なメソッドだけを持つ小さな interface を定義する方法と併用できます。本章では Reader/Writer の分離を `domain/repository` に置く例を示します。Interactor ごとにさらに絞り込む方法は、第3章「Go の interface 設計」で詳しく解説しています。
+教科書的な DDD のアプローチです。ドメイン層に Repository interface を定義し、infrastructure 層で実装します。Go の「利用側で interface を定義する」慣習に従い、usecase 層の各 Interactor が必要なメソッドだけを持つ小さな interface を定義する方法と併用できます。本章では Reader/Writer の分離を `domain/repository` に置く例を示します。Interactor ごとにさらに絞り込む方法は、第12章「Go の interface 設計」で詳しく解説しています。
 
 ```go
 // domain/repository/task_repository.go
@@ -146,7 +146,7 @@ func (i *TaskInteractor) GetTask(ctx context.Context, id string) (*TaskOutput, e
 - ドメインモデルと DB スキーマがほぼ一致しています
 - sqlc / ent の interface をそのままテスト用のモックとして使えます
 
-レベル2では、sqlc の生成エラー（`sql.ErrNoRows` 等）が usecase 層にそのまま漏れる点にも注意が必要です。第7章「エラーハンドリング設計」で解説したエラー変換の仕組みを入れるか、handler 層で infrastructure 固有のエラーを変換する必要があります。
+レベル2では、sqlc の生成エラー（`sql.ErrNoRows` 等）が usecase 層にそのまま漏れる点にも注意が必要です。第16章「エラーハンドリング設計」で解説するエラー変換の仕組みを入れるか、handler 層で infrastructure 固有のエラーを変換する必要があります。
 
 ### レベル3：直接依存（抽象化なし）
 

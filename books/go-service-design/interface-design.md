@@ -86,7 +86,7 @@ Go の作者 Rob Pike はこう述べています。
 >
 > — [Go Proverbs](https://go-proverbs.github.io/)
 
-Go 標準ライブラリの interface はほとんどが1〜2メソッドです。
+Go 標準ライブラリには、利用側が必要とする能力を小さく表した interface が多数あります。
 
 | interface        | メソッド数 |
 | ---------------- | ---------- |
@@ -97,7 +97,7 @@ Go 標準ライブラリの interface はほとんどが1〜2メソッドです�
 | `http.Handler`   | 1          |
 | `sort.Interface` | 3          |
 
-私の Repository interface は5〜8メソッドありました。Go の基準では「太い」interface でした。
+私の Repository interface は5〜8メソッドあり、複数の利用者が別々の一部だけを必要としていました。問題は個数だけではなく、1つの凝集した契約ではなく複数の関心を束ねていたことです。5〜8メソッドでも、利用者がその契約全体を必要とするなら、個数だけを理由に分割する必要はありません。
 
 ### ズレ3：「将来のため」の interface が残っている
 
@@ -113,7 +113,7 @@ type getTaskResultsInteractor struct {
 }
 ```
 
-Go コミュニティではこれを **Preemptive Interface（先回り interface）** と呼び、アンチパターンとされています。
+このような「将来使うかもしれない」という理由で提供側に先に interface を置く設計は、**Preemptive Interface（先回り interface）** と呼ばれることがあります。これは下記の記事で使われている名称であり、Go 公式が定義した用語やメソッド数の基準ではありません。公式の Code Review Comments が示すのは、interface は一般に利用側に置き、実装側は具体型を返す、という指針です。
 
 > A great rule of thumb for Go is accept interfaces, return structs.
 >
@@ -241,7 +241,7 @@ type TaskResultRepository interface {
 }
 ```
 
-Go の基準では太すぎます。そこで**Reader / Writer に分離**しました。
+読み取りだけを使う利用者と書き込みだけを使う利用者が分かれていたため、**Reader / Writer に分離**しました。分割理由は6メソッドという数そのものではなく、利用側の契約が2つの関心に分かれていたことです。
 
 ```go
 // domain/repository/task_result_repository.go

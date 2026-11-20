@@ -25,7 +25,9 @@ Vaughn Vernon は、集約間の参照を ID に限定し、1トランザクシ�
 | RegisterUser     | UserRegistered           |
 | ChangeAddress    | AddressChanged           |
 
-イベントには後続処理に必要な情報を含めますが、集約の全フィールドを公開する必要はありません。発行後に内容を変更しないように扱い、スライスなどの参照データはコピーします。
+イベントに何を含めるかは、1つの一般原則だけでは決まりません。最小限の ID を通知し、受信側が送信元へ問い合わせる **Event Notification** は payload と重複データを減らせますが、受信側が送信元の可用性と API に依存します。必要な状態をイベントに載せる **Event-Carried State Transfer** は受信側を自律させやすい一方、データ複製、個人情報、payload サイズ、スキーマ進化の負担が増えます。
+
+同一プロセスのドメインイベントでは、ハンドラが判断するために必要な値だけを含め、集約の全フィールドを公開しません。プロセス外へ出す Integration Event では、受信側の可用性要件と上記のトレードオフを明示して選びます。いずれの場合も発行後に内容を変更しないように扱い、スライスなどの参照データはコピーします。
 
 ```go
 package order
@@ -200,4 +202,5 @@ func (uc *ConfirmOrderInteractor) Execute(ctx context.Context, id string) error 
 | DDD 原典 | Eric Evans, _Domain-Driven Design: Tackling Complexity in the Heart of Software_（2003） |
 | 集約設計の原則 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
 | ドメインイベント | Vaughn Vernon, [Domain Events](https://www.informit.com/articles/article.aspx?p=2020371) |
+| Event Notification と Event-Carried State Transfer | Martin Fowler, [What do you mean by “Event-Driven”?](https://martinfowler.com/articles/201701-event-driven.html) |
 | 結果整合性 | Werner Vogels, [Eventually Consistent](https://dl.acm.org/doi/10.1145/1435417.1435432) |

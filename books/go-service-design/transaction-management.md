@@ -61,13 +61,26 @@ func (r *OrderRepository) Save(ctx context.Context, order *model.Order) error {
 
 ## TxManager パターン：関数で境界を渡す
 
-私が使っているのは、トランザクション境界を関数として受け取る interface を UseCase 層に定義する方法です。
+トランザクション境界を関数として受け取る interface を UseCase 層に定義します。ここでは、トランザクションに束縛された Repository を `TxScope` から受け取る形にします。
 
 ```go
 // usecase/tx.go
-// UseCase層はこのinterfaceしか知らない
+// UseCase層はdatabase/sqlを知らない。
+type OrderWriter interface {
+    Save(context.Context, *model.Order) error
+}
+
+type InventoryWriter interface {
+    Reserve(context.Context, []model.OrderItem) error
+}
+
+type TxScope interface {
+    Orders() OrderWriter
+    Inventory() InventoryWriter
+}
+
 type TxManager interface {
-    Do(ctx context.Context, fn func(ctx context.Context) error) error
+    Do(ctx context.Context, fn func(context.Context, TxScope) error) error
 }
 ```
 
@@ -76,100 +89,109 @@ UseCase 層は「この範囲を1つの作業単位にしたい」という意�
 ```go
 // usecase/place_order.go
 type PlaceOrderInteractor struct {
-    tx        TxManager
-    orders    orderWriter
-    inventory inventoryWriter
+    tx TxManager
 }
 
 func (i *PlaceOrderInteractor) Execute(ctx context.Context, input PlaceOrderInput) error {
     order := model.NewOrder(input.CustomerID, input.Items)
 
-    return i.tx.Do(ctx, func(ctx context.Context) error {
-        if err := i.orders.Save(ctx, order); err != nil {
+    return i.tx.Do(ctx, func(ctx context.Context, repos TxScope) error {
+        if err := repos.Orders().Save(ctx, order); err != nil {
             return err
         }
-        return i.inventory.Reserve(ctx, order.Items())
+        return repos.Inventory().Reserve(ctx, order.Items())
     })
 }
 ```
 
-`fn`がエラーを返せばロールバック、nil を返せばコミットを試みます。境界の決定権は UseCase 層にあり、`*sql.Tx`は一切登場しません。コミット時の通信障害では結果が不明になることもあるため、単純に処理全体を再実行してよいとは限りません。
+`fn`がエラーを返せばロールバックし、nil を返せばコミットを試みます。境界の決定権は UseCase 層にあり、`*sql.Tx`は登場しません。コミット時の通信障害では結果が不明になることもあるため、単純に処理全体を再実行してよいとは限りません。
 
-### infrastructure 層の実装：context で Tx を受け渡す
+### infrastructure 層の実装：Tx に束縛した Repository を作る
 
-実装側の課題は、`Do`の中で呼ばれた Repository に、開始済みのトランザクションをどう届けるかです。ここでは、`context.Context`に載せる方法を使います。
+infrastructure 層はトランザクションを開始し、同じ `*sql.Tx` を使う Repository 群を callback に渡します。`NewOrderRepository` と `NewInventoryRepository` は、`*sql.DB` と `*sql.Tx` の共通部分を表す非公開の `queryer` を受け取るものとします。
 
 ```go
 // infrastructure/postgres/tx_manager.go
-package postgres
+type queryer interface {
+    ExecContext(context.Context, string, ...any) (sql.Result, error)
+    QueryRowContext(context.Context, string, ...any) *sql.Row
+}
 
-type txKey struct{} // 非公開の型をキーにする
+type txScope struct {
+    orders    usecase.OrderWriter
+    inventory usecase.InventoryWriter
+}
+
+func (s txScope) Orders() usecase.OrderWriter       { return s.orders }
+func (s txScope) Inventory() usecase.InventoryWriter { return s.inventory }
 
 type TxManager struct {
     db *sql.DB
 }
 
-func (m *TxManager) Do(ctx context.Context, fn func(ctx context.Context) error) error {
+func (m *TxManager) Do(
+    ctx context.Context,
+    fn func(context.Context, usecase.TxScope) error,
+) error {
     tx, err := m.db.BeginTx(ctx, nil)
     if err != nil {
         return err
     }
     defer tx.Rollback()
 
-    if err := fn(context.WithValue(ctx, txKey{}, tx)); err != nil {
+    repos := txScope{
+        orders:    NewOrderRepository(tx),
+        inventory: NewInventoryRepository(tx),
+    }
+    if err := fn(ctx, repos); err != nil {
         return err
     }
     return tx.Commit()
 }
 ```
 
-Repository は、context にトランザクションがあればそれを、なければ`*sql.DB`を使います。
+Repository の接続先は生成時に確定するため、callback の内側で誤って `*sql.DB` へフォールバックしません。参加させる Repository が増えると `TxScope` も増えるため、ユースケース群に合わせて小さな scope を分けます。別の DB や外部 API はこのローカルトランザクションには参加しません。callback を抜けた後に Repository や `*sql.Tx` を goroutine から使ってはいけません。
+
+### 受け渡し方法の選択肢
+
+トランザクションを Repository に届ける方法は1つではありません。
+
+| 方法 | 利点 | 注意点 |
+| --- | --- | --- |
+| Tx に束縛した Repository／Repository factory | 参加する接続が明示され、DB への暗黙フォールバックを避けやすい | factory や scope の型が増える |
+| Tx-aware Repository を callback の引数で渡す | データフローを直接追える | UseCase の署名がインフラ都合に寄りやすい |
+| `context.Context` の値で Tx を渡す | 既存の Repository interface を変えずに済む | 隠れた依存になり、context の用途に関する議論がある |
+| Unit of Work | 複数 Repository の作業単位を1つの抽象にできる | 変更追跡まで実装すると複雑になる |
+
+`context.Context`を使う方式を選ぶ場合も、トランザクション参加が必須の経路で値がなければ通常の DB へ黙って切り替えないようにします。伝播漏れを成功扱いすると atomicity が失われるためです。
 
 ```go
-// infrastructure/postgres/queryer.go
-// *sql.DBと*sql.Txの共通部分を束ねるinterface
-type queryer interface {
-    ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-    QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
+var ErrTransactionRequired = errors.New("transaction is required")
 
-func (r *OrderRepository) conn(ctx context.Context) queryer {
-    if tx, ok := ctx.Value(txKey{}).(*sql.Tx); ok {
-        return tx
+type txKey struct{}
+
+func requiredTx(ctx context.Context) (*sql.Tx, error) {
+    tx, ok := ctx.Value(txKey{}).(*sql.Tx)
+    if !ok || tx == nil {
+        return nil, ErrTransactionRequired
     }
-    return r.db
-}
-
-func (r *OrderRepository) Save(ctx context.Context, order *model.Order) error {
-    _, err := r.conn(ctx).ExecContext(ctx, "INSERT INTO orders ...", /* ... */)
-    return err
+    return tx, nil
 }
 ```
 
-### context に Tx を入れてよいのか
-
-Go の`context`ドキュメントは、値の用途をリクエストスコープのデータに限定するよう求めており、トランザクションを載せることには批判もあります。私がこの方法を許容しているのは、次の条件を守れる場合に限ります。
-
-- キーの型（`txKey`）を**postgres パッケージの非公開型**にする。context に Tx が載っている事実を知るのは infrastructure 層の postgres パッケージだけで、UseCase 層からは観測できません
-- Tx が載っていなくても正しく動く（`*sql.DB`にフォールバックする）
-
-この2つを守ると、context への格納は「同一パッケージ内の隠れた受け渡し」に収まり、レイヤー間の契約には現れません。逆に、キーを公開して UseCase 層で Tx を取り出すような使い方を始めたら、それは依存性ルール違反の抜け道です。
-
-`Do`内の Repository は同じ DB と同じキーを使い、渡された context を維持する必要があります。別の DB 接続や外部 API はこのトランザクションに参加しません。この簡易実装は入れ子の`Do`を扱わないため、呼び出し側で禁止するか、参加・拒否などの方針を別途実装します。トランザクション終了後に goroutine から Tx を使うことも避けます。
-
-なお、明示的に`queryer`を引数で引き回す設計（メソッドシグネチャに`q queryer`を足す）も選べます。隠れた受け渡しがなくなる代わりに、domain 層の Repository interface にインフラ都合の引数が漏れます。私は「interface の純度」を優先して context 方式を選んでいますが、ここは好みが分かれる場所です。
+Go の`context`ドキュメントは、値を API 境界を通過する request-scoped data に限り、任意のオプション引数の代わりに使わないよう求めています。Tx を載せる設計はその指針との適合をチームで判断し、非公開キー、必須時の失敗、入れ子の扱い、トランザクション終了後に使わせない規則をテストします。本書の例では、隠れた受け渡しを避けるため Repository factory 方式を採用します。
 
 ---
 
 ## Unit of Work パターンはどうか
 
-.NET 圏の文献では、変更された集約を記録しておき、最後にまとめてコミットする Unit of Work パターンがよく登場します。
+Martin Fowler は Unit of Work を次のように説明しています。
 
 > Maintains a list of objects affected by a business transaction and coordinates the writing out of changes and the resolution of concurrency problems.
 >
 > — Martin Fowler, [P of EAA: Unit of Work](https://martinfowler.com/eaaCatalog/unitOfWork.html)
 
-Go での本格的な Unit of Work は、変更追跡の仕組み（どのエンティティが変わったかの記録）を自前で作ることになり、実装コストが高くつきます。ORM が変更追跡を提供する言語圏の道具だと私は割り切っていて、Go で採用したことはありません。TxManager パターンは、Unit of Work の「作業単位をまとめてコミットする」という目的だけを、変更追跡なしで達成する簡易版と位置づけられます。
+Go でも Unit of Work は選択肢です。ただし、上の `TxScope` のようにトランザクションへ束縛した Repository 群だけを提供する軽量な形と、変更された Entity の追跡や自動 flush まで担う形は分けて考えます。前者は明示性を保ちやすく、後者は ORM などの支援がなければ実装と検証の負担が大きくなります。必要な保証を先に決め、単に他言語の実装を移植するのではなく、変更追跡が本当に必要かを判断します。
 
 ---
 

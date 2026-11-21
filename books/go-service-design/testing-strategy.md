@@ -91,15 +91,16 @@ func TestNewEmail(t *testing.T) {
     }
 }
 
-func TestEmail_Equals(t *testing.T) {
+func TestEmail_Equality(t *testing.T) {
     email1, _ := model.NewEmail("user@example.com")
     email2, _ := model.NewEmail("user@example.com")
     email3, _ := model.NewEmail("other@example.com")
 
-    if !email1.Equals(email2) {
+    // 比較可能な値オブジェクトは == で比較できます（第7章）。
+    if email1 != email2 {
         t.Error("同じアドレスのEmailは等しいはずです")
     }
-    if email1.Equals(email3) {
+    if email1 == email3 {
         t.Error("異なるアドレスのEmailは等しくないはずです")
     }
 }
@@ -111,13 +112,10 @@ func TestEmail_Equals(t *testing.T) {
 
 ```go
 // domain/model/order_test.go
-package model_test
+// 非公開フィールドの状態を確認するため、model パッケージ内のテストとして書きます。
+package model
 
-import (
-    "testing"
-
-    "example/domain/model"
-)
+import "testing"
 
 func TestOrder_Confirm(t *testing.T) {
     t.Run("下書き状態の注文を確定できる", func(t *testing.T) {
@@ -128,15 +126,15 @@ func TestOrder_Confirm(t *testing.T) {
         if err != nil {
             t.Fatalf("Confirm() でエラーが発生しました: %v", err)
         }
-        if order.Status() != model.OrderStatusConfirmed {
-            t.Errorf("ステータスが %q になりました。%q を期待していました",
-                order.Status(), model.OrderStatusConfirmed)
+        if order.status != OrderStatusConfirmed {
+            t.Errorf("ステータスが %v になりました。%v を期待していました",
+                order.status, OrderStatusConfirmed)
         }
     })
 
     t.Run("確定済みの注文は再度確定できない", func(t *testing.T) {
         order := newTestOrder(t)
-        order.Confirm()
+        _ = order.Confirm()
 
         err := order.Confirm()
 
@@ -147,7 +145,7 @@ func TestOrder_Confirm(t *testing.T) {
 
     t.Run("キャンセル済みの注文は確定できない", func(t *testing.T) {
         order := newTestOrder(t)
-        order.Cancel("テスト用キャンセル")
+        _ = order.Cancel()
 
         err := order.Confirm()
 
@@ -157,39 +155,14 @@ func TestOrder_Confirm(t *testing.T) {
     })
 }
 
-func TestOrder_Ship(t *testing.T) {
-    t.Run("確定済みの注文を出荷できる", func(t *testing.T) {
-        order := newTestOrder(t)
-        order.Confirm()
-
-        err := order.Ship("TRACK-001")
-
-        if err != nil {
-            t.Fatalf("Ship() でエラーが発生しました: %v", err)
-        }
-        if order.Status() != model.OrderStatusShipped {
-            t.Errorf("ステータスが %q になりました。%q を期待していました",
-                order.Status(), model.OrderStatusShipped)
-        }
-    })
-
-    t.Run("下書き状態の注文は出荷できない", func(t *testing.T) {
-        order := newTestOrder(t)
-
-        err := order.Ship("TRACK-001")
-
-        if err == nil {
-            t.Error("下書き状態の注文に対する Ship() はエラーを返すべきです")
-        }
-    })
-}
-
 // newTestOrder はテスト用の注文を生成するヘルパーです。
-func newTestOrder(t *testing.T) *model.Order {
+func newTestOrder(t *testing.T) *Order {
     t.Helper()
-    order, err := model.NewOrder("order-1", "customer-1", []model.OrderItem{
-        {ProductID: "product-1", Quantity: 2, Price: 1000},
-    })
+    item, err := NewOrderItem("product-1", "テスト商品", 1000, 2)
+    if err != nil {
+        t.Fatalf("テスト用明細の生成に失敗しました: %v", err)
+    }
+    order, err := NewOrder("order-1", []OrderItem{item})
     if err != nil {
         t.Fatalf("テスト用注文の生成に失敗しました: %v", err)
     }
@@ -203,26 +176,24 @@ func newTestOrder(t *testing.T) *model.Order {
 
 ```go
 func TestOrder_StateTransitions(t *testing.T) {
-    type action func(*model.Order) error
+    type action func(*Order) error
 
-    confirm := func(o *model.Order) error { return o.Confirm() }
-    ship := func(o *model.Order) error { return o.Ship("TRACK-001") }
-    cancel := func(o *model.Order) error { return o.Cancel("テスト") }
+    confirm := func(o *Order) error { return o.Confirm() }
+    cancel := func(o *Order) error { return o.Cancel() }
 
     tests := []struct {
         name       string
         setup      []action // 事前に実行するアクション
         action     action   // テスト対象のアクション
         wantErr    bool
-        wantStatus model.OrderStatus
+        wantStatus OrderStatus // エラーを期待するケースでは確認しません
     }{
-        {"Draft→Confirmed", nil, confirm, false, model.OrderStatusConfirmed},
-        {"Draft→Shipped", nil, ship, true, ""},
-        {"Draft→Cancelled", nil, cancel, false, model.OrderStatusCancelled},
-        {"Confirmed→Shipped", []action{confirm}, ship, false, model.OrderStatusShipped},
-        {"Confirmed→Cancelled", []action{confirm}, cancel, false, model.OrderStatusCancelled},
-        {"Shipped→Cancelled", []action{confirm, ship}, cancel, true, ""},
-        {"Cancelled→Confirmed", []action{cancel}, confirm, true, ""},
+        {"Draft→Confirmed", nil, confirm, false, OrderStatusConfirmed},
+        {"Draft→Cancelled", nil, cancel, false, OrderStatusCancelled},
+        {"Confirmed→Cancelled", []action{confirm}, cancel, false, OrderStatusCancelled},
+        {"Confirmed→Confirmed", []action{confirm}, confirm, true, 0},
+        {"Cancelled→Confirmed", []action{cancel}, confirm, true, 0},
+        {"Cancelled→Cancelled", []action{cancel}, cancel, true, 0},
     }
 
     for _, tt := range tests {
@@ -239,8 +210,8 @@ func TestOrder_StateTransitions(t *testing.T) {
             if (err != nil) != tt.wantErr {
                 t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
             }
-            if !tt.wantErr && order.Status() != tt.wantStatus {
-                t.Errorf("status = %q, want %q", order.Status(), tt.wantStatus)
+            if !tt.wantErr && order.status != tt.wantStatus {
+                t.Errorf("status = %v, want %v", order.status, tt.wantStatus)
             }
         })
     }
@@ -254,9 +225,7 @@ stateDiagram-v2
     [*] --> Draft
     Draft --> Confirmed: Confirm
     Draft --> Cancelled: Cancel
-    Confirmed --> Shipped: Ship
     Confirmed --> Cancelled: Cancel
-    Shipped --> [*]
     Cancelled --> [*]
 ```
 
@@ -304,9 +273,8 @@ func TestPricingService_CalculateTotal(t *testing.T) {
             },
         }
         svc := service.NewPricingService(finder)
-        items := []model.OrderItem{
-            {ProductID: "p1", Quantity: 1, Price: 10000},
-        }
+        item, _ := model.NewOrderItem("p1", "商品", 10000, 1)
+        items := []model.OrderItem{item}
 
         total, err := svc.CalculateTotal(context.Background(), "customer-1", items)
 
@@ -322,9 +290,8 @@ func TestPricingService_CalculateTotal(t *testing.T) {
     t.Run("割引ルールがない場合は定価", func(t *testing.T) {
         finder := &discountRuleFinder{rules: nil}
         svc := service.NewPricingService(finder)
-        items := []model.OrderItem{
-            {ProductID: "p1", Quantity: 2, Price: 500},
-        }
+        item, _ := model.NewOrderItem("p1", "商品", 500, 2)
+        items := []model.OrderItem{item}
 
         total, err := svc.CalculateTotal(context.Background(), "customer-1", items)
 
@@ -340,7 +307,7 @@ func TestPricingService_CalculateTotal(t *testing.T) {
 
 ### モックライブラリを使わない理由
 
-Mitchell Hashimoto の講演 [Advanced Testing with Go](https://www.youtube.com/watch?v=8hQG7QlcLBk) でも紹介されているとおり、Go の標準ライブラリはモックライブラリを使いません。テストファイル内にスタブ構造体を定義しています。本章でも同じスタイルを採用しています。理由は次のとおりです。
+本章では、モックライブラリではなく、テストファイル内に定義したスタブ構造体を使います。理由は次のとおりです。
 
 - **Go の interface は暗黙的**に満たされるため、テスト用のスタブを簡単に作成できます
 - **interface が小さい**（1〜2メソッド）場合、モック生成ツールのオーバーヘッドが利点を上回ります
@@ -408,9 +375,11 @@ func TestConfirmOrderInteractor(t *testing.T) {
     t.Run("注文を確定してイベントを発行する", func(t *testing.T) {
         repo := newInMemoryOrderRepo()
         bus := &spyEventBus{}
-        order, err := model.NewOrder("order-1", "customer-1", []model.OrderItem{
-            {ProductID: "p1", Quantity: 1, Price: 1000},
-        })
+        item, err := model.NewOrderItem("p1", "商品", 1000, 1)
+        if err != nil {
+            t.Fatalf("テスト用明細の生成に失敗しました: %v", err)
+        }
+        order, err := model.NewOrder("order-1", []model.OrderItem{item})
         if err != nil {
             t.Fatalf("テスト用注文の生成に失敗しました: %v", err)
         }
@@ -422,8 +391,9 @@ func TestConfirmOrderInteractor(t *testing.T) {
         if err != nil {
             t.Fatalf("Execute() error = %v", err)
         }
-        if repo.orders["order-1"].Status() != model.OrderStatusConfirmed {
-            t.Error("注文のステータスが confirmed になっていません")
+        // 状態は非公開のため、確定済みであることを「再確定がエラーになる」で確かめます。
+        if err := repo.orders["order-1"].Confirm(); err == nil {
+            t.Error("注文が確定されていません（再確定がエラーになるべきです）")
         }
         if len(bus.published) == 0 {
             t.Error("ドメインイベントが発行されていません")
@@ -503,9 +473,11 @@ func TestOrderRepository_SaveAndFindByID(t *testing.T) {
         testDB.Exec("DELETE FROM orders WHERE id = $1", "test-order-1")
     })
 
-    order, err := model.NewOrder("test-order-1", "customer-1", []model.OrderItem{
-        {ProductID: "p1", Quantity: 2, Price: 1000},
-    })
+    item, err := model.NewOrderItem("p1", "商品", 1000, 2)
+    if err != nil {
+        t.Fatalf("テスト用明細の生成に失敗しました: %v", err)
+    }
+    order, err := model.NewOrder("test-order-1", []model.OrderItem{item})
     if err != nil {
         t.Fatalf("テスト用注文の生成に失敗しました: %v", err)
     }
@@ -523,8 +495,8 @@ func TestOrderRepository_SaveAndFindByID(t *testing.T) {
     if found.ID() != order.ID() {
         t.Errorf("ID = %q, want %q", found.ID(), order.ID())
     }
-    if found.Status() != order.Status() {
-        t.Errorf("Status = %q, want %q", found.Status(), order.Status())
+    if found.TotalPrice() != order.TotalPrice() {
+        t.Errorf("TotalPrice = %d, want %d", found.TotalPrice(), order.TotalPrice())
     }
 }
 ```
@@ -629,7 +601,7 @@ func TestOrder_Confirm(t *testing.T) {
 
 テストの構造を「準備（Arrange）→ 実行（Act）→ 検証（Assert）」の3段階で統一します。空行で区切ることで、各フェーズが一目で分かります。
 
-本章のコード例もすべてこのパターンに従っています。たとえば `TestOrder_Confirm` では、`newTestOrder(t)` が準備、`order.Confirm()` が実行、`order.Status()` の検証が Assert に対応します。
+本章のコード例も、この形に沿って書いています。たとえば `TestOrder_Confirm` では、`newTestOrder(t)` が準備、`order.Confirm()` が実行、`order.status` の検証が Assert に対応します。
 
 ### 3. テストヘルパーには t.Helper() を付ける
 
@@ -675,6 +647,5 @@ DDD のテスト戦略は、レイヤーごとに適切なテストレベルを�
 | テストピラミッド | Mike Cohn, _Succeeding with Agile_（2009）；Martin Fowler, [TestPyramid](https://martinfowler.com/bliki/TestPyramid.html) |
 | DDD 原典 | Eric Evans, _Domain-Driven Design: Tackling Complexity in the Heart of Software_（2003） |
 | IDDD のテスト戦略 | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
-| Go のテストパターン | Mitchell Hashimoto, [Advanced Testing with Go](https://www.youtube.com/watch?v=8hQG7QlcLBk) |
 | テストダブルの分類 | Gerard Meszaros, _xUnit Test Patterns_（2007） |
 | TDD と DDD | Kent Beck, _Test Driven Development: By Example_（2002） |

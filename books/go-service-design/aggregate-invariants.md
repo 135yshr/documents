@@ -130,8 +130,9 @@ package model
 
 type OrderStatus int
 
+// iota + 1 で始めるため、ゼロ値（0）は「未設定」として検出できます。
 const (
-    OrderStatusDraft OrderStatus = iota
+    OrderStatusDraft OrderStatus = iota + 1
     OrderStatusConfirmed
     OrderStatusCancelled
 )
@@ -389,16 +390,19 @@ Go の標準ライブラリでは `sync.Mutex` や `bytes.Buffer` がこの方�
 // ReconstructOrder はリポジトリからの復元専用です。
 // ビジネスロジックからは NewOrder を使用してください。
 func ReconstructOrder(id string, status OrderStatus, items []OrderItem, totalPrice int) Order {
+    // NewOrder と同じく、呼び出し元のスライスとは所有権を分けるためにコピーします。
+    copied := make([]OrderItem, len(items))
+    copy(copied, items)
     return Order{
         id:         id,
         status:     status,
-        items:      items,
+        items:      copied,
         totalPrice: totalPrice,
     }
 }
 ```
 
-この関数は公開されているため、誤用のリスクがあります。これを軽減する方法として以下が考えられます。
+この関数は公開されているため、誤用のリスクがあります。`ReconstructOrder` は検証を行わないため、永続化された値が不変条件を満たしているという前提を、リポジトリ実装のテストで確認する必要があります。これを軽減する方法として以下が考えられます。
 
 - 関数名とコメントで用途を明示します
 - コードレビューで `Reconstruct` の呼び出し元がリポジトリ実装に限定されていることを確認します
@@ -572,4 +576,4 @@ Go にはクラスやアクセス修飾子はありませんが、**パッケー
 | Go のエクスポートルール | [The Go Programming Language Specification](https://go.dev/ref/spec#Exported_identifiers) |
 | Go のゲッター慣例 | [Effective Go](https://go.dev/doc/effective_go#Getters) |
 | Go のパッケージ設計 | [Go Blog: Organizing Go code](https://go.dev/blog/organizing-go-code) |
-| ゼロ値の活用 | [Go Blog: The zero value](https://go.dev/ref/spec#The_zero_value) |
+| ゼロ値の活用 | [Go 言語仕様: The zero value](https://go.dev/ref/spec#The_zero_value) |

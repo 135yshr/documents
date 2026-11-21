@@ -465,15 +465,31 @@ writeJSON(w, httpStatusOf(internal.Code()), ErrorResponse{
 
 ### HTTP ステータスコードでリソースの存在を推測させない
 
-`404 Not Found`と`403 Forbidden`を使い分けると、リソースの存在が推測できてしまいます。認可エラーでもリソースの存在を隠したい場合は、一律`404`を返す設計を検討してください。
+`404 Not Found`と`403 Forbidden`を使い分けると、リソースの存在が推測できてしまいます。認可エラーでもリソースの存在を隠したい場合は、「存在しない」場合とまったく同じ応答を返す設計を検討してください。
+
+ステータスだけを`404`に変えても不十分です。本文のコードやメッセージが`AUTH002`と`RES001`で異なれば、クライアントは両者を区別できます。存在を隠す操作では、ステータス、コード、メッセージのすべてをそろえます。
 
 ```go
-// httpStatusOf の対応表で、認可エラーを404に変換する例
-var statusByCode = map[string]int{
-    // ...（前節と同じ）
-    "AUTH002": http.StatusNotFound, // 存在を推測させない
+// 存在を隠したいリソースの入口で使う変換です。
+// 認可エラーを「見つからない」に置き換え、ステータス・コード・メッセージをそろえます。
+func concealExistence(err error) error {
+    if errors.Is(err, apperror.ErrForbidden) {
+        return apperror.ErrNotFound
+    }
+    return err
+}
+
+func (h *JobHandler) GetJob(w http.ResponseWriter, r *http.Request) {
+    result, err := h.getJob.Execute(r.Context(), r.PathValue("id"))
+    if err != nil {
+        HandleError(w, concealExistence(err))
+        return
+    }
+    writeJSON(w, http.StatusOK, result)
 }
 ```
+
+置き換える前のエラーは、調査のためにサーバー側のログへ記録します。応答をそろえても、処理時間の差から存在を推測できる場合があります。その差が問題になる操作では、別に対策が必要です。
 
 ### スタックトレースをクライアントに返さない
 

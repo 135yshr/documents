@@ -21,8 +21,15 @@ func Handler(completer Completer) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/readings/"), "/complete")
-		if !strings.HasPrefix(r.URL.Path, "/readings/") || !strings.HasSuffix(r.URL.Path, "/complete") || id == "" || strings.Contains(id, "/") {
+		// 接頭辞を外した残りから接尾辞を外します。元のパスに対して両方を別々に調べると、
+		// "/readings/complete" のように接頭辞と接尾辞が重なるパスを ID "complete" として受け入れてしまいます。
+		rest, ok := strings.CutPrefix(r.URL.Path, "/readings/")
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		id, ok := strings.CutSuffix(rest, "/complete")
+		if !ok || id == "" || strings.Contains(id, "/") {
 			http.NotFound(w, r)
 			return
 		}

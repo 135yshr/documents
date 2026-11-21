@@ -6,10 +6,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +23,10 @@ import (
 //
 // IDEMPOTENCY_TEST_DSN が設定されていればその DB を使います。
 // 設定されていなければ embedded-postgres で一時的な PostgreSQL を起動します。
+//
+// どちらの場合も、テスト専用のスキーマを作ってその中だけで作業し、終了時に削除します。
+// テストは各ケースの前にテーブルを TRUNCATE するため、指定された DB に同名のテーブルが
+// あっても、その行を消さないようにするためです。
 var testDB *sql.DB
 
 func TestMain(m *testing.M) {
@@ -57,7 +63,18 @@ func runWithDatabase(m *testing.M) int {
 		dsn = withSSLDisabled(cfg.GetConnectionURL())
 	}
 
-	db, err := sql.Open("postgres", dsn)
+	admin, err := sql.Open("postgres", dsn)
+	if err != nil {
+		panic(err)
+	}
+	defer admin.Close()
+	schema := fmt.Sprintf("idempotency_test_%d_%d", os.Getpid(), time.Now().UnixNano())
+	if _, err := admin.Exec(`CREATE SCHEMA ` + pq.QuoteIdentifier(schema)); err != nil {
+		panic(err)
+	}
+	defer admin.Exec(`DROP SCHEMA ` + pq.QuoteIdentifier(schema) + ` CASCADE`)
+
+	db, err := sql.Open("postgres", withSearchPath(dsn, schema))
 	if err != nil {
 		panic(err)
 	}
@@ -79,6 +96,19 @@ func withSSLDisabled(url string) string {
 		return url + "&sslmode=disable"
 	}
 	return url + "?sslmode=disable"
+}
+
+// withSearchPath は、接続が使うスキーマをテスト専用のものに限定します。
+// search_path に public を含めないため、未修飾のテーブル名は専用スキーマだけを指します。
+func withSearchPath(dsn, schema string) string {
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		sep := "?"
+		if strings.Contains(dsn, "?") {
+			sep = "&"
+		}
+		return dsn + sep + "search_path=" + schema
+	}
+	return dsn + " search_path=" + schema
 }
 
 func freePort() (uint32, error) {
@@ -196,13 +226,24 @@ func TestSameKeyDifferentPrincipalIsIndependent(t *testing.T) {
 // 後続は先行の commit を待ち、保存済みのレスポンスを返すはずです。
 func TestConcurrentSameKeyAfterCommitReturnsStoredResponse(t *testing.T) {
 	reset(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	body := orderBody(t, "customer-1", 1200)
 
 	reached := make(chan struct{})
 	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	var wg sync.WaitGroup
+	// 途中で失敗しても、commit 前で止めた先行リクエストとそのトランザクションを残しません。
+	// 残ると、次のテストの TRUNCATE がロック待ちになります。
+	t.Cleanup(func() {
+		releaseOnce()
+		cancel()
+		wg.Wait()
+	})
 	aDone := make(chan createResult, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		h := createHooks{beforeCommit: func() error {
 			close(reached)
 			<-release
@@ -211,10 +252,16 @@ func TestConcurrentSameKeyAfterCommitReturnsStoredResponse(t *testing.T) {
 		s, r, err := createOrder(ctx, testDB, h, "user-1", "key-1", body)
 		aDone <- createResult{s, r, err}
 	}()
-	<-reached
+	select {
+	case <-reached:
+	case a := <-aDone:
+		t.Fatalf("先行リクエストが commit 前の位置に到達しませんでした: %v", a.err)
+	}
 
 	bDone := make(chan createResult, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		s, r, err := CreateOrder(ctx, testDB, "user-1", "key-1", body)
 		bDone <- createResult{s, r, err}
 	}()
@@ -225,7 +272,7 @@ func TestConcurrentSameKeyAfterCommitReturnsStoredResponse(t *testing.T) {
 	default:
 	}
 
-	close(release)
+	releaseOnce()
 	a := <-aDone
 	b := <-bDone
 	if a.err != nil || b.err != nil {
@@ -242,13 +289,24 @@ func TestConcurrentSameKeyAfterCommitReturnsStoredResponse(t *testing.T) {
 // 先行リクエストが rollback した場合、後続は同じキーを使って新しく処理できます。
 func TestConcurrentSameKeyAfterRollbackProcessesFollower(t *testing.T) {
 	reset(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	body := orderBody(t, "customer-1", 1200)
 
 	reached := make(chan struct{})
 	release := make(chan struct{})
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	var wg sync.WaitGroup
+	// 途中で失敗しても、commit 前で止めた先行リクエストとそのトランザクションを残しません。
+	// 残ると、次のテストの TRUNCATE がロック待ちになります。
+	t.Cleanup(func() {
+		releaseOnce()
+		cancel()
+		wg.Wait()
+	})
 	aDone := make(chan createResult, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		h := createHooks{beforeCommit: func() error {
 			close(reached)
 			<-release
@@ -257,16 +315,22 @@ func TestConcurrentSameKeyAfterRollbackProcessesFollower(t *testing.T) {
 		s, r, err := createOrder(ctx, testDB, h, "user-1", "key-1", body)
 		aDone <- createResult{s, r, err}
 	}()
-	<-reached
+	select {
+	case <-reached:
+	case a := <-aDone:
+		t.Fatalf("先行リクエストが commit 前の位置に到達しませんでした: %v", a.err)
+	}
 
 	bDone := make(chan createResult, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		s, r, err := CreateOrder(ctx, testDB, "user-1", "key-1", body)
 		bDone <- createResult{s, r, err}
 	}()
 	waitForLockWaiter(t)
 
-	close(release)
+	releaseOnce()
 	a := <-aDone
 	b := <-bDone
 	if a.err == nil {
@@ -302,6 +366,16 @@ func TestDuplicateKeyInsertAfterCommitByIsolationLevel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			bFinished := make(chan struct{})
+			bStarted := false
+			// 途中で失敗しても txA を残しません。commit 済みなら Rollback は何もしません。
+			// txA を終えると待機中の B も進むため、B の終了も待ちます。
+			defer func() {
+				_ = txA.Rollback()
+				if bStarted {
+					<-bFinished
+				}
+			}()
 			if _, err := txA.ExecContext(ctx, `
                 INSERT INTO http_requests (principal, operation, idem_key, request_hash, response_status, response_body)
                 VALUES ('user-1', 'create-order', 'key-1', $1, 201, '{"order_id":"a"}')`, hash); err != nil {
@@ -315,7 +389,9 @@ func TestDuplicateKeyInsertAfterCommitByIsolationLevel(t *testing.T) {
 				selErr error
 			}
 			bDone := make(chan readResult, 1)
+			bStarted = true
 			go func() {
+				defer close(bFinished)
 				txB, err := testDB.BeginTx(ctx, &sql.TxOptions{Isolation: tc.isolation})
 				if err != nil {
 					bDone <- readResult{insErr: err}

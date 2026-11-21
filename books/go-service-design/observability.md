@@ -25,9 +25,14 @@ OpenTelemetry（OTel）は計装の API、SDK、データモデルなどを提�
 
 ### シグナルの成熟度（執筆時点）
 
-OpenTelemetry の成熟度は、言語とシグナルごとに異なります。OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)を2026年11月21日に確認しました。Go の Traces と Metrics は Stable、Logs は Release candidate と記載されています。Logs の API と SDK は、Traces や Metrics と同じ成熟度として扱わないでください。ステータスは将来変わるため、採用前に公式情報で確認します。
+OpenTelemetry の成熟度は、言語とシグナルごとに異なります。2026年11月21日に、2つの公式情報を確認しました。両者の表示は一致していません。
 
-標準の `log/slog` は Go 標準ライブラリの機能であり、OpenTelemetry の Logs とは別に扱います。OTLP で Logs を送る場合は、利用する SDK と Collector の対応状況も確認します。
+- **ステータスページ**: OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)の表示です。Go の Traces と Metrics は Stable、Logs は Release candidate です。
+- **リリース**: OpenTelemetry Go の [v1.47.0](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0) は、2026年10月2日に公開されました。このリリースは、Logs の API と SDK の最初の安定版です。対象は `go.opentelemetry.io/otel/log` と `go.opentelemetry.io/otel/sdk/log` です。
+
+つまり、Logs の API と SDK は v1.47.0 以降で安定版ですが、ステータスページの表示は確認時点で更新されていません。一方、同じリポジトリの `versions.yaml` では、OTLP のログ exporter（`otlploggrpc`、`otlploghttp`）は v1 ではなく実験的なモジュール群に含まれています。Logs を OTLP で送る構成では、API と SDK だけでなく exporter の安定度も確認してください。ステータスは変わるため、採用時には利用するバージョンのリリースノートを確認します。
+
+標準の `log/slog` は Go 標準ライブラリの機能であり、OpenTelemetry の Logs とは別に扱います。OTLP で Logs を送る場合は、Collector の対応状況も確認します。
 
 コンポジションルートで SDK、exporter、リソース属性（サービス名など）を設定し、アダプターや UseCase の計装に必要な tracer や meter を注入します。終了時は送信を flush し、provider を停止します。収集量、サンプリング、通信失敗時の扱いと機密情報の除外も設定してください。
 

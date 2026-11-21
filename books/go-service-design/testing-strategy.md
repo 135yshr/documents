@@ -166,7 +166,7 @@ func newTestOrder(t *testing.T) *Order {
     if err != nil {
         t.Fatalf("テスト用注文の生成に失敗しました: %v", err)
     }
-    return order
+    return &order // NewOrder は値を返すため、アドレスを渡します
 }
 ```
 
@@ -383,7 +383,7 @@ func TestConfirmOrderInteractor(t *testing.T) {
         if err != nil {
             t.Fatalf("テスト用注文の生成に失敗しました: %v", err)
         }
-        repo.orders["order-1"] = order
+        repo.orders["order-1"] = &order
 
         uc := usecase.NewConfirmOrderInteractor(repo, bus)
         err = uc.Execute(context.Background(), "order-1")
@@ -391,9 +391,10 @@ func TestConfirmOrderInteractor(t *testing.T) {
         if err != nil {
             t.Fatalf("Execute() error = %v", err)
         }
-        // 状態は非公開のため、確定済みであることを「再確定がエラーになる」で確かめます。
-        if err := repo.orders["order-1"].Confirm(); err == nil {
-            t.Error("注文が確定されていません（再確定がエラーになるべきです）")
+        // 状態は非公開のため、永続化用の Snapshot（第8章）で確定済みであることを確かめます。
+        // 「再確定がエラーになる」だけでは、誤ってキャンセルした場合と区別できません。
+        if got := repo.orders["order-1"].Snapshot().Status; got != model.OrderStatusConfirmed {
+            t.Errorf("status = %v, want %v", got, model.OrderStatusConfirmed)
         }
         if len(bus.published) == 0 {
             t.Error("ドメインイベントが発行されていません")
@@ -483,7 +484,7 @@ func TestOrderRepository_SaveAndFindByID(t *testing.T) {
     }
 
     // Save
-    if err := repo.Save(ctx, order); err != nil {
+    if err := repo.Save(ctx, &order); err != nil {
         t.Fatalf("Save() error = %v", err)
     }
 
@@ -497,6 +498,10 @@ func TestOrderRepository_SaveAndFindByID(t *testing.T) {
     }
     if found.TotalPrice() != order.TotalPrice() {
         t.Errorf("TotalPrice = %d, want %d", found.TotalPrice(), order.TotalPrice())
+    }
+    // 状態が別の値として復元されていないことも確かめます。
+    if got, want := found.Snapshot().Status, order.Snapshot().Status; got != want {
+        t.Errorf("Status = %v, want %v", got, want)
     }
 }
 ```
@@ -606,15 +611,17 @@ func TestOrder_Confirm(t *testing.T) {
 ### 3. テストヘルパーには t.Helper() を付ける
 
 ```go
-func newTestOrder(t *testing.T) *model.Order {
-    t.Helper() // エラー時のスタックトレースがこの関数を飛ばす
-    order, err := model.NewOrder("order-1", "customer-1", []model.OrderItem{
-        {ProductID: "product-1", Quantity: 2, Price: 1000},
-    })
+func newTestOrder(t *testing.T) *Order {
+    t.Helper() // 失敗時に報告される行が、このヘルパーではなく呼び出し元になる
+    item, err := NewOrderItem("product-1", "テスト商品", 1000, 2)
+    if err != nil {
+        t.Fatalf("テスト用明細の生成に失敗しました: %v", err)
+    }
+    order, err := NewOrder("order-1", []OrderItem{item})
     if err != nil {
         t.Fatalf("テスト用注文の生成に失敗しました: %v", err)
     }
-    return order
+    return &order
 }
 ```
 

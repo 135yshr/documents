@@ -69,14 +69,24 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 ```go
 // usecase/analyze_user.go
 func (i *AnalyzeUserInteractor) Execute(ctx context.Context, input *AnalyzeInput) (*AnalyzeOutput, error) {
+    // 既存の結果があれば、分析せずに返します。再試行のたびに分析する無駄を省き、
+    // 分析が一時的に失敗する状況でも保存済みの結果を返せます。
+    // ただし、この検索だけでは並行する2つのリクエストを防げません。
+    existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check existing result: %w", err)
+    }
+    if existing != nil {
+        return &AnalyzeOutput{Result: existing, IsNew: false}, nil
+    }
+
     result, err := i.analyzer.Analyze(ctx, input.Content)
     if err != nil {
         return nil, err
     }
 
     // 「存在しなければ保存」を DB の一意制約で原子的に判定します。
-    // 先に検索して存在しないことを確かめてから保存する方式は、並行する2つのリクエストが
-    // 同時に検索を通過すると、両方が保存を試みてしまいます。
+    // 2つのリクエストが同時に上の検索を通過しても、保存できるのは一方だけです。
     created, err := i.resultRepo.SaveIfAbsent(ctx, input.UserID, result)
     if err != nil {
         return nil, fmt.Errorf("failed to save result: %w", err)
@@ -93,7 +103,7 @@ func (i *AnalyzeUserInteractor) Execute(ctx context.Context, input *AnalyzeInput
 }
 ```
 
-この例では、分析を先に実行するため、既存の結果がある場合にも分析の計算が無駄になります。分析前の検索で無駄を減らすこともできますが、その検索は性能のための最適化にすぎません。正しさは `SaveIfAbsent` の一意制約が保証します。
+この例は2段構えです。分析前の検索は、再試行で分析を繰り返さないためのものです。この検索だけでは、同時に届いた2つのリクエストがどちらも「結果なし」と判断することを防げません。結果が二重に保存されないことは、`SaveIfAbsent` の一意制約で防ぎます。なお、同時に届いた場合は両方のリクエストが分析するため、分析の回数までは1回に抑えられません。
 
 ### 排他制御の追加
 
@@ -145,7 +155,14 @@ type FullAnalyzeInteractor struct {
 }
 
 func (i *FullAnalyzeInteractor) Execute(ctx context.Context, input *AnalyzeInput) (*FullAnalyzeOutput, error) {
-    // 冪等性は、保存時の一意制約（前節の SaveIfAbsent と同じ方式）で担保します。
+    // 冪等性は前節と同じ方式です。分析前に既存の結果を調べ、保存は SaveIfAbsent で行います。
+    existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to check existing: %w", err)
+    }
+    if existing != nil {
+        return &FullAnalyzeOutput{Result: existing, IsNew: false}, nil
+    }
 
     // セキュリティ分析
     secResult, err := i.securityAnalyzer.Analyze(ctx, input)
@@ -162,8 +179,17 @@ func (i *FullAnalyzeInteractor) Execute(ctx context.Context, input *AnalyzeInput
     // 結果をマージ
     merged := model.MergeAnalysisResults(secResult, classResult)
 
-    if err := i.resultRepo.Save(ctx, merged); err != nil {
+    created, err := i.resultRepo.SaveIfAbsent(ctx, input.UserID, merged)
+    if err != nil {
         return nil, fmt.Errorf("failed to save merged result: %w", err)
+    }
+    if !created {
+        // 並行する別のリクエストが先に保存した場合は、その結果を返します。
+        existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
+        if err != nil {
+            return nil, fmt.Errorf("failed to load existing result: %w", err)
+        }
+        return &FullAnalyzeOutput{Result: existing, IsNew: false}, nil
     }
 
     return &FullAnalyzeOutput{Result: merged, IsNew: true}, nil
@@ -261,14 +287,18 @@ func (i *GetStatisticsInteractor) Execute(ctx context.Context, input *GetStatsIn
 }
 ```
 
-これは「パススルー」に見えます。ただ、この UseCase には現在の責務があります。
+これは「パススルー」に見えます。このコードが実際に行っているのは、1つの reader の呼び出しと、結果の Output への変換だけです。それでも UseCase として置くことで、次の2点が成り立ちます。
 
 - HTTP 以外の入口（バッチや worker など）からも、同じ業務操作を呼べる
-- トランザクション境界と Context の伝播を、操作の単位で決められる
-- 認可の調整や計測を、Handler の外で1か所にまとめられる
-- 複数の Repository や外部呼び出しを、1つの操作として組み立てられる
+- Context の伝播とエラーの文脈付けを、操作の単位で決められる
 
-本書の例では、この統計 UseCase に後からキャッシュとアクセス権チェックを入れました。Handler に直接書いていたら、入口が増えたときに重複したはずです。ただし、これは本書のサンプルでの経験です。上の責務が現在のサービスにない場合、UseCase を置かない判断もあります。
+加えて、UseCase は次の責務の置き場所にできます。上のコードはこれらを実装していません。
+
+- トランザクション境界の決定
+- 認可の調整や計測を、Handler の外で1か所にまとめること
+- 複数の Repository や外部呼び出しを、1つの操作として組み立てること
+
+本書の例では、この統計 UseCase に後からキャッシュとアクセス権チェックを入れました。Handler に直接書いていたら、入口が増えたときに重複したはずです。ただし、これは本書のサンプルでの経験です。こうした責務が現在のサービスになく、入口も1つだけの場合は、UseCase を置かない判断もあります。
 
 ---
 
@@ -383,7 +413,7 @@ func (m *mockImporter) Execute(_ context.Context, _ *usecase.ImportUsersInput) (
 
 UseCase 層をすべての機能に必須とは考えません。重要なのは、業務操作の責務（入口からの分離、トランザクション、Context、認可、計測）をどこで扱うかを明示し、その判断を説明できることです。
 
-「パススルー UseCase」は直ちに問題を示すわけではありません。ただし、それを置く理由は、将来ロジックが増える可能性ではなく、上に挙げた現在の責務にあるべきです。
+「パススルー UseCase」は直ちに問題を示すわけではありません。ただし、それを置く理由は、将来ロジックが増える可能性ではなく、入口からの分離など現在成り立っている責務にあるべきです。
 
 ---
 

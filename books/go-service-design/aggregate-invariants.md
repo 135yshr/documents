@@ -164,24 +164,34 @@ Go にはコンストラクタ構文がありません。代わりに `New` プ�
 // domain/model/order.go
 
 func NewOrderItem(productID, name string, price, quantity int) (OrderItem, error) {
-    if productID == "" {
-        return OrderItem{}, errors.New("商品IDは必須です")
-    }
-    if name == "" {
-        return OrderItem{}, errors.New("商品名は必須です")
-    }
-    if price <= 0 {
-        return OrderItem{}, errors.New("価格は1以上でなければなりません")
-    }
-    if quantity <= 0 {
-        return OrderItem{}, errors.New("数量は1以上でなければなりません")
-    }
-    return OrderItem{
+    item := OrderItem{
         productID: productID,
         name:      name,
         price:     price,
         quantity:  quantity,
-    }, nil
+    }
+    if err := item.validate(); err != nil {
+        return OrderItem{}, err
+    }
+    return item, nil
+}
+
+// validate は明細の不変条件を検査します。
+// パッケージ外でも OrderItem{} というゼロ値は作れるため、明細を受け取る側でも呼びます。
+func (i OrderItem) validate() error {
+    if i.productID == "" {
+        return errors.New("商品IDは必須です")
+    }
+    if i.name == "" {
+        return errors.New("商品名は必須です")
+    }
+    if i.price <= 0 {
+        return errors.New("価格は1以上でなければなりません")
+    }
+    if i.quantity <= 0 {
+        return errors.New("数量は1以上でなければなりません")
+    }
+    return nil
 }
 
 func (i OrderItem) Subtotal() int {
@@ -201,6 +211,9 @@ func NewOrder(id string, items []OrderItem) (Order, error) {
 
     total := 0
     for _, item := range copied {
+        if err := item.validate(); err != nil {
+            return Order{}, fmt.Errorf("注文明細が不正です: %w", err)
+        }
         total += item.Subtotal()
     }
 
@@ -218,6 +231,7 @@ func NewOrder(id string, items []OrderItem) (Order, error) {
 - **通常の生成経路を `New` 関数に集約する**: パッケージ外から非公開フィールドを指定した構造体を組み立てられません。ただし `Order{}` というゼロ値は作れるため、後述するゼロ値の方針も必要です
 - **スライスのコピー**: 呼び出し元が渡したスライスをそのまま保持すると、外部からの変更で不変条件が壊れます。コンストラクタでは所有権を取得するためにコピーします
 - **`totalPrice` の自動計算**: 合計金額を外部から渡さず、明細から計算することで整合性を保ちやすくします
+- **明細の再検証**: `NewOrderItem` を通らないゼロ値の明細（`OrderItem{}`）も渡せるため、`NewOrder` と `AddItem` でも明細を検査します
 
 ---
 
@@ -228,7 +242,10 @@ func NewOrder(id string, items []OrderItem) (Order, error) {
 ```go
 func (o *Order) AddItem(item OrderItem) error {
     if o.status != OrderStatusDraft {
-        return errors.New("確定済みの注文には明細を追加できません")
+        return errors.New("下書き状態の注文にのみ明細を追加できます")
+    }
+    if err := item.validate(); err != nil {
+        return fmt.Errorf("注文明細が不正です: %w", err)
     }
     o.items = append(o.items, item)
     o.totalPrice += item.Subtotal()
@@ -249,12 +266,17 @@ func (o *Order) Confirm() error {
 // Cancel は下書き・確定済みの注文をキャンセルします。
 // このサンプルでは確定済み注文もキャンセル可能にしていますが、
 // ビジネスルールによっては確定後のキャンセルを禁止する設計も考えられます。
+// 許可する状態を列挙するため、ゼロ値（未設定）の注文はキャンセルできません。
 func (o *Order) Cancel() error {
-    if o.status == OrderStatusCancelled {
+    switch o.status {
+    case OrderStatusDraft, OrderStatusConfirmed:
+        o.status = OrderStatusCancelled
+        return nil
+    case OrderStatusCancelled:
         return errors.New("すでにキャンセル済みです")
+    default:
+        return errors.New("無効な注文です（New関数で生成してください）")
     }
-    o.status = OrderStatusCancelled
-    return nil
 }
 ```
 

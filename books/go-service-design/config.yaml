@@ -28,9 +28,9 @@ chapters:
   - validation-design
   - error-handling
   - di-composition-root
-  - context-lifecycle
 
-  # 第5部 プロセスを越える
+  # 第5部 処理とプロセスの境界
+  - context-lifecycle
   - process-boundary
 
   # 第6部 観測可能なサービスを作る

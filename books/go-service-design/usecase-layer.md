@@ -298,7 +298,7 @@ internal/{module}/
 ├── domain/
 │   ├── model/               # エンティティ + 値オブジェクト
 │   └── repository/          # Repository interface
-├── usecase/                  # UseCase（常に存在する）
+├── usecase/                  # UseCase（私のプロジェクトでは全モジュールに置いた）
 │   ├── port/output/          # Output Port（外部サービス抽象化）
 │   ├── import_users.go
 │   ├── get_user.go
@@ -316,7 +316,7 @@ internal/{module}/
     └── provider.go           # DI設定
 ```
 
-`usecase/`ディレクトリがすべてのモジュールに存在します。
+私のプロジェクトでは、`usecase/`ディレクトリをすべてのモジュールに置きました。これはこのプロジェクトでの選択であり、すべての Go サービスに当てはまる規則ではありません。
 
 ---
 
@@ -378,8 +378,8 @@ func (m *mockImporter) Execute(_ context.Context, _ *usecase.ImportUsersInput) (
 | 当初の考え | 運用後の気づき |
 | --- | --- |
 | パススルー UseCase は無駄です | 入口の分離や横断的な責務（認可、計測、トランザクション）の置き場所として価値があります。該当する責務がなければ省略できます |
-| CRUD なら Handler 直接呼びで良いです | ドメインモデルが Handler 層に漏れます。統一構造の方がチームに優しくなります |
-| UseCase 層は複雑さに応じて省略すべきです | 全機能に統一して持つ方が迷いが減ります |
+| CRUD なら Handler 直接呼びで良いです | ドメインモデルが Handler 層に漏れます。私のプロジェクトでは統一構造の方が扱いやすくなりました |
+| UseCase 層は複雑さに応じて省略すべきです | 私のプロジェクトでは全機能に統一して持つ方が迷いが減りました。CRUD 中心のサービスでは、必要な機能だけに置く判断もあります |
 
 UseCase 層をすべての機能に必須とは考えません。重要なのは、業務操作の責務（入口からの分離、トランザクション、Context、認可、計測）をどこで扱うかを明示し、その判断を説明できることです。
 

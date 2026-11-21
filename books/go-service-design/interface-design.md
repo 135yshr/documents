@@ -347,7 +347,7 @@ c.Provide(usecase.NewAnalyzeTaskInteractor)
 
 ### 「interface ファイルが各 Handler に散らばって管理しづらくないか」
 
-もっともな懸念です。ただ、各 Handler ファイルの先頭に private interface として定義するため、**interface と利用箇所が常に隣接**します。実際に運用してみると、「この interface はどこで使われているか」を探す手間はほとんど発生しませんでした。
+もっともな懸念です。ただ、各 Handler ファイルの先頭に private interface として定義するため、**interface と利用箇所が隣接**します。実際に運用してみると、「この interface はどこで使われているか」を探す手間はほとんど発生しませんでした。
 
 ```go
 // interface/rest/handler/task_handler.go

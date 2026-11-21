@@ -6,6 +6,8 @@ title: "トランザクション境界を越える〜Outbox・再送・冪等性
 
 第9章ではインプロセスのドメインイベント、第14章では単一 DB のローカルトランザクションを扱いました。この章では、注文の確定を別サービスへ通知する例で、プロセス境界を越えるときの障害を扱います。DB とブローカーを1つのローカルトランザクションにはできません。
 
+話の流れは次のとおりです。ドメインイベントを別プロセスへ届けようとすると、DB への保存と送信の二重書き（Dual Write）の問題が生じます。Transactional Outbox はこの問題を、保存と「送信予定の記録」を1つのトランザクションにまとめることで避けます。ただし、その結果として得られるのは at-least-once の配送であり、同じイベントが重複して届くことがあります。そのため、受信側と HTTP の入口で冪等性を設計します。本章は exactly-once の配送を前提にしません。
+
 ## Dual Write と Transactional Outbox
 
 DB のコミット後に送信すると、その間の停止や送信失敗で通知が失われます。先に送信する場合は、注文をロールバックしても通知を取り消せません。どちらも **Dual Write** の問題です。
@@ -314,7 +316,9 @@ HTTP クライアントのタイムアウトでは、サーバーが処理済み
 
 次は `READ COMMITTED` の PostgreSQL で、注文作成と保存済みレスポンスを同じトランザクションに記録する例です。キーの予約も同じトランザクション内で完結します。並行する同一キーの INSERT は、先行トランザクションが commit か rollback するまで待ちます。先行が commit していれば `ON CONFLICT` により 0 行となり、続く SELECT は新しい文のスナップショットで保存済みレスポンスを読みます。先行が rollback していれば、キーは残らないため後続が処理を続けます。
 
-これは PostgreSQL の挙動を本書のサンプルで確認した結果です。待ち方と読み取りの結果は分離レベルに依存し、`REPEATABLE READ` では同じ INSERT が直列化失敗（SQLSTATE `40001`）になります。そのためアプリケーション側で再試行が必要です。別のデータベースや分離レベルで同じ保証を前提にしてはいけません。待ち時間には、`lock_timeout` や `context` の期限で上限を設けます。サンプルとテストは `example/idempotency` にあり、PostgreSQL 16 の一時インスタンスに対して、commit 後・rollback 後の並行リクエストと分離レベルごとの違いを確認しています。
+この説明は、PostgreSQL 16 の公式ドキュメントの記述と、本書のサンプルでの確認結果に基づきます。公式ドキュメントによると、PostgreSQL の既定の分離レベルは `READ COMMITTED` で、各文はその文の開始時点までに commit されたデータを見ます（MVCC のスナップショット）。一意インデックスへの挿入は、競合する行を未 commit のトランザクションが挿入していた場合、そのトランザクションの終了を待ちます。また、他のトランザクションの結果が INSERT のスナップショットから見えない状況で `ON CONFLICT DO NOTHING` が挿入を行わないのは、`READ COMMITTED` の場合だけだと明記されています。
+
+待ち方と読み取りの結果は分離レベルに依存し、`REPEATABLE READ` では同じ INSERT が直列化失敗（SQLSTATE `40001`）になります。そのためアプリケーション側で再試行が必要です。別のデータベースや分離レベルで同じ保証を前提にしてはいけません。待ち時間には、`lock_timeout` や `context` の期限で上限を設けます。サンプルとテストは `example/idempotency` にあり、PostgreSQL 16 の一時インスタンスに対して、commit 後・rollback 後の並行リクエストと分離レベルごとの違いを確認しています。
 
 ```sql
 CREATE TABLE http_requests (
@@ -456,3 +460,7 @@ HTTP ハンドラは `Idempotency-Key` ヘッダーを取得し、認証・認�
 | 冪等な Consumer | Chris Richardson, [Idempotent consumer](https://microservices.io/patterns/communication-style/idempotent-consumer.html) |
 | Saga | Chris Richardson, [Saga](https://microservices.io/patterns/data/saga.html) |
 | backoff と jitter | AWS, [Exponential Backoff and Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) |
+| 分離レベルと `ON CONFLICT` の挙動 | PostgreSQL 16 Documentation, [13.2. Transaction Isolation](https://www.postgresql.org/docs/16/transaction-iso.html) |
+| `INSERT ... ON CONFLICT` | PostgreSQL 16 Documentation, [INSERT](https://www.postgresql.org/docs/16/sql-insert.html) |
+| 一意性検査と未 commit 行の待機 | PostgreSQL 16 Documentation, [64.5. Index Uniqueness Checks](https://www.postgresql.org/docs/16/index-unique-checks.html) |
+| MVCC の概要 | PostgreSQL 16 Documentation, [13.1. Introduction](https://www.postgresql.org/docs/16/mvcc-intro.html) |

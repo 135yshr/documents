@@ -6,7 +6,7 @@ title: "UseCase 層は必要か〜パススルーの価値を考える〜"
 
 :::message
 
-本章は、Go でクリーンアーキテクチャを採用したプロジェクトを運用する中で、UseCase 層の要否を問い直しながら調べてきた内容をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+本章は、Go でクリーンアーキテクチャを採用したプロジェクトを運用する中で、UseCase 層の要否を問い直しながら調べてきた内容をまとめたものです。運用経験に基づく判断と、一次情報源で裏付けられる一般論を区別して書いています。一般論には参照リンクを付けています。
 
 :::
 
@@ -69,32 +69,37 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 ```go
 // usecase/analyze_user.go
 func (i *AnalyzeUserInteractor) Execute(ctx context.Context, input *AnalyzeInput) (*AnalyzeOutput, error) {
-    // 既に分析済みなら既存の結果を返す（冪等性）
-    existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to check existing result: %w", err)
-    }
-    if existing != nil {
-        return &AnalyzeOutput{Result: existing, IsNew: false}, nil
-    }
-
-    // 新規分析を実行
     result, err := i.analyzer.Analyze(ctx, input.Content)
     if err != nil {
         return nil, err
     }
 
-    if err := i.resultRepo.Save(ctx, result); err != nil {
+    // 「存在しなければ保存」を DB の一意制約で原子的に判定します。
+    // 先に検索して存在しないことを確かめてから保存する方式は、並行する2つのリクエストが
+    // 同時に検索を通過すると、両方が保存を試みてしまいます。
+    created, err := i.resultRepo.SaveIfAbsent(ctx, input.UserID, result)
+    if err != nil {
         return nil, fmt.Errorf("failed to save result: %w", err)
+    }
+    if !created {
+        existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
+        if err != nil {
+            return nil, fmt.Errorf("failed to load existing result: %w", err)
+        }
+        return &AnalyzeOutput{Result: existing, IsNew: false}, nil
     }
 
     return &AnalyzeOutput{Result: result, IsNew: true}, nil
 }
 ```
 
+この例では、分析を先に実行するため、既存の結果がある場合にも分析の計算が無駄になります。分析前の検索で無駄を減らすこともできますが、その検索は性能のための最適化にすぎません。正しさは `SaveIfAbsent` の一意制約が保証します。
+
 ### 排他制御の追加
 
-ユーザーの一括インポートで、同時実行を防ぐチェックが必要になりました。インポート処理は外部 API を叩きながら大量のデータを取り込むため、同時に複数実行すると API のレートリミットに抵触したり、データの整合性が崩れたりするリスクがあります。
+ユーザーの一括インポートでは、同時に複数のインポートが走らないようにする必要がありました。インポート処理は外部 API を叩きながら大量のデータを取り込むため、同時に複数実行すると API のレートリミットに抵触したり、データの整合性が崩れたりするリスクがあります。
+
+最初は「処理中のインポートがないことを確認してから保存する」と書きました。しかし、この方式は確認と保存の間に別のリクエストが割り込むと、両方が確認を通過してしまいます。排他は、DB の一意制約として持たせます。
 
 ```go
 // usecase/import_users.go
@@ -104,23 +109,27 @@ func (i *ImportUsersInteractor) Execute(ctx context.Context, input *ImportUsersI
         return nil, err
     }
 
-    // 排他チェック：処理中のインポートがあれば拒否
-    running, err := i.importRepo.ExistsPendingOrProcessing(ctx)
-    if err != nil {
-        return nil, fmt.Errorf("failed to check running imports: %w", err)
-    }
-    if running {
-        return nil, apperror.ErrAlreadyRunning
-    }
-
     // ドメインオブジェクト生成
     task := model.NewImportTask(input.Source, input.WebhookURL)
-    if err := i.importRepo.Save(ctx, task); err != nil {
+
+    // 処理中（pending / processing）のタスクは1件だけという制約を DB に持たせ、
+    // 制約違反を排他の失敗として扱います。
+    if err := i.importRepo.SaveExclusive(ctx, task); err != nil {
+        if errors.Is(err, model.ErrTaskAlreadyRunning) {
+            return nil, apperror.ErrAlreadyRunning
+        }
         return nil, fmt.Errorf("failed to save import task: %w", err)
     }
 
     return &ImportUsersOutput{TaskID: task.ID, Status: string(task.Status)}, nil
 }
+```
+
+DB 側では、次のような部分一意インデックスで「処理中のタスクは1件だけ」を表します。定数式を使うと、対象行の全体に対する一意性を表現できます。
+
+```sql
+CREATE UNIQUE INDEX uq_import_tasks_active ON import_tasks ((true))
+    WHERE status IN ('pending', 'processing');
 ```
 
 ### 複数戦略の組み合わせ
@@ -136,14 +145,7 @@ type FullAnalyzeInteractor struct {
 }
 
 func (i *FullAnalyzeInteractor) Execute(ctx context.Context, input *AnalyzeInput) (*FullAnalyzeOutput, error) {
-    // 冪等性チェック
-    existing, err := i.resultRepo.FindByUserID(ctx, input.UserID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to check existing: %w", err)
-    }
-    if existing != nil {
-        return &FullAnalyzeOutput{Result: existing, IsNew: false}, nil
-    }
+    // 冪等性は、保存時の一意制約（前節の SaveIfAbsent と同じ方式）で担保します。
 
     // セキュリティ分析
     secResult, err := i.securityAnalyzer.Analyze(ctx, input)

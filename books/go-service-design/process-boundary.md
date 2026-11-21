@@ -109,6 +109,8 @@ func Confirm(ctx context.Context, db *sql.DB, orderID string) error {
 
 複数ワーカーで同じ行を同時に取得しないよう、短い DB トランザクションで行をリースします。ネットワーク送信中は DB ロックを保持しません。下記は1件ずつ処理する例です。`Publish` は、ブローカー側で永続化されたことを確認する ACK を待ち、確認できない場合はエラーを返すアダプターです。ブローカーの永続化設定、購読、ACK と再配信の設定も必要です。単にクライアントの送信バッファへ入れるだけでは保証になりません。
 
+ただし、この `DispatchOne` は参考実装です。本書のテストは、この関数と SQL を実 DB で実行していません。リース、再送、DLQ への移動は、本章末尾の未確認項目として実装時に検証してください。
+
 ```go
 package delivery
 
@@ -250,45 +252,59 @@ import (
     "errors"
 )
 
-func ApplyPoints(ctx context.Context, db *sql.DB, m Message) error {
+// decodeOrderConfirmed は配送メッセージを業務上のイベントに戻します。
+func decodeOrderConfirmed(m Message) (OrderConfirmedV1, error) {
     if m.Type != "order.confirmed.v1" {
-        return errors.New("未対応のイベント種別です")
+        return OrderConfirmedV1{}, errors.New("未対応のイベント種別です")
     }
     var e OrderConfirmedV1
     if err := json.Unmarshal(m.Payload, &e); err != nil {
-        return err
+        return OrderConfirmedV1{}, err
     }
-    if e.EventID == "" || e.EventID != m.ID || e.CustomerID == "" || e.TotalAmount < 0 {
-        return errors.New("不正なイベントです")
+    if e.EventID != m.ID {
+        return OrderConfirmedV1{}, errors.New("イベント ID が一致しません")
+    }
+    return e, nil
+}
+
+// ApplyPoints は、同じイベントを何度受け取っても加算を一度だけ適用します。
+// applied が false の場合は、処理済みのイベントです。
+func ApplyPoints(ctx context.Context, db *sql.DB, e OrderConfirmedV1) (applied bool, err error) {
+    if e.EventID == "" || e.CustomerID == "" || e.TotalAmount < 0 {
+        return false, errors.New("不正なイベントです")
     }
     tx, err := db.BeginTx(ctx, nil)
     if err != nil {
-        return err
+        return false, err
     }
     defer tx.Rollback()
+
     result, err := tx.ExecContext(ctx, `
         INSERT INTO processed_events (consumer, event_id) VALUES ('points-v1', $1)
-        ON CONFLICT DO NOTHING`, m.ID)
+        ON CONFLICT DO NOTHING`, e.EventID)
     if err != nil {
-        return err
+        return false, err
     }
     n, err := result.RowsAffected()
     if err != nil {
-        return err
+        return false, err
     }
-    if n == 1 {
-        _, err = tx.ExecContext(ctx, `
-            INSERT INTO point_accounts (customer_id, points) VALUES ($1, $2)
-            ON CONFLICT (customer_id) DO UPDATE
-            SET points = point_accounts.points + EXCLUDED.points`,
-            e.CustomerID, e.TotalAmount/100)
-        if err != nil {
-            return err
-        }
+    if n == 0 {
+        return false, tx.Commit()
     }
-    return tx.Commit()
+    _, err = tx.ExecContext(ctx, `
+        INSERT INTO point_accounts (customer_id, points) VALUES ($1, $2)
+        ON CONFLICT (customer_id) DO UPDATE
+        SET points = point_accounts.points + EXCLUDED.points`,
+        e.CustomerID, e.TotalAmount/100)
+    if err != nil {
+        return false, err
+    }
+    return true, tx.Commit()
 }
 ```
+
+上の関数は `example/idempotency/consumer.go` と同じ重複判定の手順を、`OrderConfirmedV1` の項目で書いたものです。同じ内容は `ApplyPoints` のテスト（`TestApplyPointsIgnoresRedeliveredEvent` など）で検証しています。配送メッセージは `decodeOrderConfirmed` で変換してから渡します。
 
 Consumer はこの関数が成功してからブローカーへ ACK します。コミット後、ACK 前に停止すれば再配信されますが、ユニーク制約が二重加算を防ぎます。エラー時は ACK せず、ブローカーの再配信または DLQ 方針に従います。外部 API 呼び出しはこの DB トランザクションに含まれません。外部側の冪等キーや Consumer 側の別 Outbox が必要です。処理済み ID は、ブローカーの保持期間と DLQ に再投入できる期間を含む、最大の再配信期間より長く保持します。
 
@@ -430,7 +446,7 @@ HTTP ハンドラは `Idempotency-Key` ヘッダーを取得し、認証・認�
 - 同一キーの並行リクエストが、先行の commit 後には保存済みレスポンスを、先行の rollback 後には後続の処理を得ること
 - 同じ `order.confirmed.v1` の逐次の再配信で、ポイントが1回だけ加算されること
 
-まだ確認していない項目もあります。障害注入による commit 応答の喪失、Consumer の並行配信、Outbox dispatcher の再送は、実装時に追加して確かめてください。リース期限切れ、順序逆転、DLQ 再投入、保持期間切れを含め、復旧手順を定期的に演習します。
+まだ確認していない項目もあります。障害注入による commit 応答の喪失、Consumer の並行配信、Outbox dispatcher（`DispatchOne` のリース、再送、DLQ 移動を含む）の再送は、実装時に追加して確かめてください。リース期限切れ、順序逆転、DLQ 再投入、保持期間切れを含め、復旧手順を定期的に演習します。
 
 ## 参考文献
 

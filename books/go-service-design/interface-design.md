@@ -6,7 +6,7 @@ title: "Go の interface 設計〜利用側で定義し、小さく保つ〜"
 
 :::message
 
-本章は、Go でクリーンアーキテクチャを採用したプロジェクトを運用する中で、interface の設計に悩み調べてきた内容をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+本章は、Go でクリーンアーキテクチャを採用したプロジェクトを運用する中で、interface の設計に悩み調べてきた内容をまとめたものです。運用経験に基づく判断と、一次情報源で裏付けられる一般論を区別して書いています。一般論には参照リンクを付けています。
 
 :::
 
@@ -113,11 +113,7 @@ type getTaskResultsInteractor struct {
 }
 ```
 
-このような「将来使うかもしれない」という理由で提供側に先に interface を置く設計は、**Preemptive Interface（先回り interface）** と呼ばれることがあります。これは下記の記事で使われている名称であり、Go 公式が定義した用語やメソッド数の基準ではありません。公式の Code Review Comments が示すのは、interface は一般に利用側に置き、実装側は具体型を返す、という指針です。
-
-> A great rule of thumb for Go is accept interfaces, return structs.
->
-> — Jack Lindamood, [Preemptive Interface Anti-Pattern in Go](https://medium.com/@cep21/preemptive-interface-anti-pattern-in-go-54c18ac0668a)
+このような「将来使うかもしれない」という理由で提供側に先に interface を置く設計は、**Preemptive Interface（先回り interface）** と呼ばれることがあります。この呼び名は一般的な俗称であり、Go 公式が定義した用語やメソッド数の基準ではありません。参考として、Jack Lindamood の記事 [Preemptive Interface Anti-Pattern in Go](https://medium.com/@cep21/preemptive-interface-anti-pattern-in-go-54c18ac0668a) で同様の問題が扱われています。公式の Code Review Comments が示すのは、interface は一般に利用側に置き、実装側は具体型を返す、という指針です。
 
 ---
 

@@ -113,7 +113,7 @@ type getTaskResultsInteractor struct {
 }
 ```
 
-このような「将来使うかもしれない」という理由で提供側に先に interface を置く設計は、**Preemptive Interface（先回り interface）** と呼ばれることがあります。この呼び名は一般的な俗称であり、Go 公式が定義した用語やメソッド数の基準ではありません。参考として、Jack Lindamood の記事 [Preemptive Interface Anti-Pattern in Go](https://medium.com/@cep21/preemptive-interface-anti-pattern-in-go-54c18ac0668a) で同様の問題が扱われています。公式の Code Review Comments が示すのは、interface は一般に利用側に置き、実装側は具体型を返す、という指針です。
+「将来使う可能性がある」という理由で、提供側へ先に interface を置く設計は、**Preemptive Interface（先回り interface）** と呼ばれることがあります。この呼び名は俗称であり、Go 公式が定義した用語やメソッド数の基準ではありません。参考として、Jack Lindamood の記事 [Preemptive Interface Anti-Pattern in Go](https://medium.com/@cep21/preemptive-interface-anti-pattern-in-go-54c18ac0668a) が同様の問題を扱っています。公式の Code Review Comments が示す指針は、interface を利用側へ置き、実装側は具体型を返すことです。
 
 ---
 

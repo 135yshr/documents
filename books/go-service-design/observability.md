@@ -25,7 +25,7 @@ OpenTelemetry（OTel）は計装の API、SDK、データモデルなどを提�
 
 ### シグナルの成熟度（執筆時点）
 
-OpenTelemetry の成熟度は、言語とシグナルごとに異なります。OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)（2026年11月21日に確認）では、Go の Traces と Metrics は Stable、Logs は Release candidate と記載されています。Logs の API と SDK は、Traces や Metrics と同じ成熟度として扱わないでください。ステータスは将来変わるため、採用前に公式情報で確認します。
+OpenTelemetry の成熟度は、言語とシグナルごとに異なります。OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)を2026年11月21日に確認しました。Go の Traces と Metrics は Stable、Logs は Release candidate と記載されています。Logs の API と SDK は、Traces や Metrics と同じ成熟度として扱わないでください。ステータスは将来変わるため、採用前に公式情報で確認します。
 
 標準の `log/slog` は Go 標準ライブラリの機能であり、OpenTelemetry の Logs とは別に扱います。OTLP で Logs を送る場合は、利用する SDK と Collector の対応状況も確認します。
 

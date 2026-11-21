@@ -276,7 +276,7 @@ func (i *CreateJobInteractor) Execute(ctx context.Context, req *CreateJobInput) 
 
 ### なぜドメイン層は sentinel error のままなのか
 
-ドメイン層は**HTTP ステータスもエラーコードも知るべきではない**からです。ドメインの関心事は「ビジネスルール違反が起きたこと」であり、HTTP 400や409への変換はプレゼンテーションの責務です。UseCase 層は CodedError のコードまでを決め、そのコードを HTTP ステータスに変えるのは Handler 層です。
+ドメイン層は**HTTP ステータスとエラーコードのどちらも知るべきではない**からです。ドメインの関心事は「ビジネスルール違反が起きたこと」であり、HTTP 400や409への変換はプレゼンテーションの責務です。UseCase 層は CodedError のコードまでを決め、そのコードを HTTP ステータスに変えるのは Handler 層です。
 
 ```go
 // usecase/get_job_interactor.go

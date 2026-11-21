@@ -111,11 +111,11 @@ func NewEmail(v string) (Email, error) {
         return Email{}, errors.New("メールアドレスは必須です")
     }
     if strings.Count(v, "@") != 1 {
-        return Email{}, fmt.Errorf("メールアドレスの形式が不正です: %s", v)
+        return Email{}, fmt.Errorf("このサービスで許可するメールアドレス形式ではありません: %s", v)
     }
     parts := strings.SplitN(v, "@", 2)
     if parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") {
-        return Email{}, fmt.Errorf("メールアドレスの形式が不正です: %s", v)
+        return Email{}, fmt.Errorf("このサービスで許可するメールアドレス形式ではありません: %s", v)
     }
     normalized := parts[0] + "@" + strings.ToLower(parts[1])
     return Email{value: normalized}, nil
@@ -128,7 +128,9 @@ func (e Email) Domain() string {
 }
 ```
 
-バリデーションが値オブジェクトに集約されるため、usecase 層や handler 層でのチェックが不要になります。
+この例は RFC 5322 全体を実装するものではなく、`@`が1つあり、ドメイン部に`.`を要求するという**このサービス独自の簡易ルール**です。引用符付き local-part や domain-literal など、RFC が許す形式の一部を拒否する一方、一般に望ましくない入力をすべて排除できるわけでもありません。
+
+値オブジェクトには「このサービスが受理する文字列」というドメイン上の判断を集約します。JSON などの入力形式の検査は handler、利用者がそのアドレスを受信できるかの確認は確認メールなど、別の責務として扱います。厳密な RFC 構文解析と到達可能性の確認も同じ問題ではありません。
 
 ### 条件2：型の取り違えを防ぎたい
 
@@ -449,7 +451,7 @@ flowchart TD
 | ドメイン固有の振る舞い | あり → struct + メソッド | なし                 |
 | 正規化の必要性         | あり → struct + New      | なし                 |
 
-値オブジェクトは「すべてのフィールドに作るもの」ではなく、**コストに見合う効果がある場所に限定して作るもの**です。Go の Named Type は軽量な型安全性を提供し、struct + New 関数は完全なバリデーション付きの値オブジェクトを実現します。この2つを使い分けることで、過剰な型定義を避けつつ、ドメインの重要なルールを型で表現できます。
+値オブジェクトは「すべてのフィールドに作るもの」ではなく、**コストに見合う効果がある場所に限定して作るもの**です。Go の Named Type は軽量な型安全性を提供し、非公開フィールドを持つ struct + New 関数は通常の生成経路で不正な値を拒否し、ドメインルールを生成処理へ集約できます。ただし、これは生成経路すべてを保証するものではありません（第15章）。ただし、struct のゼロ値は依然として存在するため、ゼロ値を有効にするか、利用時の `Valid` 検査などで拒否する方針も必要です。この2つを使い分けることで、過剰な型定義を避けつつ、ドメインの重要なルールを型で表現できます。
 
 迷ったときは「この型を作ることで、バグを防げるか、ドメイン知識を表現できるか」と自問してください。答えが Yes なら作る価値はあります。No なら、プリミティブ型のままにしておくのが Go らしいシンプルな選択です。
 
@@ -461,6 +463,7 @@ flowchart TD
 | --- | --- |
 | 値オブジェクトの定義 | Eric Evans, _Domain-Driven Design_（2003） |
 | Primitive Obsession | Martin Fowler, [Refactoring](https://refactoring.com/) |
+| メールアドレス構文 | RFC Editor, [RFC 5322: Internet Message Format](https://www.rfc-editor.org/rfc/rfc5322#section-3.4.1) |
 | Go の型システム | [The Go Programming Language Specification](https://go.dev/ref/spec#Types) |
 | Go の命名規約 | [Effective Go](https://go.dev/doc/effective_go#names) |
 | Named Type と Type Alias の違い | [Go Spec: Type definitions](https://go.dev/ref/spec#Type_definitions) および [Alias declarations](https://go.dev/ref/spec#Alias_declarations) |

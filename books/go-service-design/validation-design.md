@@ -102,7 +102,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 - 文字列長・配列長の上限
 - 型の妥当性（UUID 形式、メールアドレス形式など）
 
-この層のバリデーションは、不正な形式のデータを早期に弾くことで後続の処理に到達するデータの品質を保証します。ただし、SQL インジェクションや XSS のような脅威に対しては入力バリデーションだけでは対策になりません（詳しくは後述の「セキュリティ観点でのバリデーション」を参照してください）。入力バリデーションの役割は、**リクエストサイズの制限や形式不正の排除**に限定されます。
+この層のバリデーションは、不正な形式のデータを早期に弾くことで、後続の処理に到達するデータの品質を高めます。ただし、SQL インジェクションや XSS のような脅威に対しては入力バリデーションだけでは対策になりません（詳しくは後述の「セキュリティ観点でのバリデーション」を参照してください）。入力バリデーションの役割は、**リクエストサイズの制限や形式不正の排除**に限定されます。
 
 ---
 
@@ -173,7 +173,7 @@ func (i *CreateTaskInteractor) Create(ctx context.Context, input *CreateTaskInpu
 ALTER TABLE tasks ADD CONSTRAINT uq_tasks_project_title UNIQUE (project_id, title);
 ```
 
-Save 時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義された sentinel error `model.ErrDuplicateTitle` を返します。第7章「エラーハンドリング設計」で述べたとおり、Repository 層はドメインの sentinel error を返し、インフラ固有のエラーはアダプター内で変換します。
+Save 時にこの制約へ違反した場合、リポジトリ実装がドメイン層で定義された sentinel error `model.ErrDuplicateTitle` を返します。第16章「エラーハンドリング設計」でも扱うように、Repository 層はドメインの sentinel error を返し、インフラ固有のエラーはアダプター内で変換します。
 
 Cockburn の[Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)の用語では、これは driven side（アプリケーションが外部に依存する側）です。`taskRepository`インターフェースが driven Port、`infrastructure/postgres`の DB 実装が driven Adapter にあたります。一方、REST handler は driving side（外部がアプリケーションを駆動する側）の Adapter です。driven Adapter が DB エラーを吸収し、driven Port を通じてドメイン側が理解できるエラーを返します。
 
@@ -202,9 +202,11 @@ UseCase 層でチェックすべき項目は以下の通りです。
 
 ### 値オブジェクトによるバリデーション
 
-値オブジェクトのコンストラクタでバリデーションを行うことで、**不正な値がシステム内に存在できない**ことを保証します。Evans（DDD, Chapter 5）は値オブジェクトの不変性と自己完結的な検証について論じています。本章の設計はその考え方に基づいています。
+値オブジェクトの生成時にバリデーションを行い、**通常の生成経路で不正な値を拒否します**。これによりドメインルールを生成処理へ集約できます。Evans（DDD, Chapter 5）は値オブジェクトの不変性と自己完結的な検証について論じています。本章の設計はその考え方に基づいています。
 
-バリデーションが必要な値オブジェクトには、Named Type（`type X string`）ではなく struct + New 関数パターンを使います（第9章）。struct の非公開フィールドにより、コンストラクタを経由しない値の生成を防げます。
+ただし Go では、コンストラクタを通らない生成経路があります。ゼロ値（`var t TaskTitle` や `TaskTitle{}`）、永続化層からの復元、JSON などのデシリアライズ、同じパッケージ内の struct literal がそれにあたります。これらは型システムだけでは防げないため、別途設計が必要です。本章では、ゼロ値を「未設定」として扱う、利用前に検査する、永続化からの復元専用の関数を用意する、といった方針をケースごとに選びます。
+
+バリデーションが必要な値オブジェクトには、Named Type（`type X string`）ではなく struct + New 関数パターンを使うことを基本とします（第7章）。struct の非公開フィールドにより、別パッケージから値を直接組み立てる経路を塞げます。
 
 ```go
 // domain/model/priority.go
@@ -364,7 +366,7 @@ func (t *Task) TransitionTo(next TaskStatus) error {
 }
 ```
 
-この設計により、`Task`は**常に有効な状態にある**ことが保証されます。ここでは`Done`と`Cancelled`を意図的に終端状態としています。「完了したタスクを再オープンしたい」という要件が出てきた場合は、`allowedTransitions`に遷移先を追加するだけで対応できます。状態遷移マップを一箇所で管理しているため、要件の変化に追従しやすい構造です。
+この設計により、`Task`は**有効な状態に保たれやすくなります**。ただし、ゼロ値や永続化からの復元などコンストラクタを経由しない生成経路は、本章の前半で述べたとおり別途扱います。ここでは`Done`と`Cancelled`を意図的に終端状態としています。「完了したタスクを再オープンしたい」という要件が出てきた場合は、`allowedTransitions`に遷移先を追加するだけで対応できます。状態遷移マップを一箇所で管理しているため、要件の変化に追従しやすい構造です。
 
 ---
 
@@ -442,7 +444,7 @@ func ContentTypeValidator() func(http.Handler) http.Handler {
 
 ## バリデーションエラーの設計
 
-各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第7章「エラーハンドリング設計」では sentinel error と`CodedError`パターンを紹介しました。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
+各層のバリデーションエラーは、呼び出し側が適切にハンドリングできる形で返す必要があります。第16章「エラーハンドリング設計」では sentinel error と`CodedError`パターンを紹介します。バリデーションエラーは複数のルール違反をまとめて返す必要があるため、本章では`RuleViolation`型を導入します。
 
 ドメイン層のエラーは「どのフィールドか」ではなく、**どのビジネスルールに違反したか**を表現します。`Field`のような HTTP リクエストに紐づく概念はプレゼンテーション層の関心事です。Evans（DDD, Chapter 4 "Isolating the Domain"）が採用するレイヤードアーキテクチャの原則では、上位層が下位層に依存し、その逆は許されません。ドメイン層がプレゼンテーション層の概念に依存する設計は、この原則に反します。DDD の文脈を超えた一般的なアーキテクチャ原則としては、Robert C. Martin の[The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)も同様の依存性ルールを定めています。
 
@@ -528,7 +530,7 @@ DDD におけるバリデーション設計のポイントを整理します。
 | UseCase 層 | ユースケースの整合性 | リポジトリへの問い合わせで外部状態を検証する |
 | ドメイン層 | 不変条件 | 値オブジェクトとエンティティのコンストラクタで保護する |
 
-最も重要な原則は、Vladimir Khorikov が[Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/)と呼ぶ考え方です。ドメインモデルが自身の不変条件を守り、プレゼンテーション層と UseCase 層がその外側で多層防御を構成します。
+重要な原則の一つは、Vladimir Khorikov が[Always-Valid Domain Model](https://enterprisecraftsmanship.com/posts/always-valid-domain-model/)と呼ぶ考え方です。ドメインモデルが自身の不変条件を守り、プレゼンテーション層と UseCase 層がその外側で多層防御を構成します。
 
 ---
 

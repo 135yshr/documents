@@ -23,6 +23,12 @@ logger.ErrorContext(ctx, "book lookup failed",
 
 OpenTelemetry（OTel）は計装の API、SDK、データモデルなどを提供します。OTLP はテレメトリーを送るためのプロトコルです。アプリケーションで生成したデータは、OTLP 対応の受信先や Collector を経由して保存・分析できます。OTel と OTLP は保存先の製品を指定するものではありません。
 
+### シグナルの成熟度（執筆時点）
+
+OpenTelemetry の成熟度は、言語とシグナルごとに異なります。OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)（2026年11月21日に確認）では、Go の Traces と Metrics は Stable、Logs は Release candidate と記載されています。Logs の API と SDK は、Traces や Metrics と同じ成熟度として扱わないでください。ステータスは将来変わるため、採用前に公式情報で確認します。
+
+標準の `log/slog` は Go 標準ライブラリの機能であり、OpenTelemetry の Logs とは別に扱います。OTLP で Logs を送る場合は、利用する SDK と Collector の対応状況も確認します。
+
 コンポジションルートで SDK、exporter、リソース属性（サービス名など）を設定し、アダプターや UseCase の計装に必要な tracer や meter を注入します。終了時は送信を flush し、provider を停止します。収集量、サンプリング、通信失敗時の扱いと機密情報の除外も設定してください。
 
 ## span と相関

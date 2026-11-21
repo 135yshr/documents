@@ -37,7 +37,7 @@ func (r *BookRepository) Find(ctx context.Context, id string) (Book, error) {
 }
 ```
 
-クライアントの切断やハンドラの終了時には、受信リクエストの Context がキャンセルされます。DB ドライバーなど呼び出し先のキャンセル対応も必要です。Context は実行中の処理を強制停止するものではありません。HTTP クライアントには `http.NewRequestWithContext` を使い、待機やループも `ctx.Done()` を監視します。Context を構造体に保存せず、処理ごとに引数で渡します。
+クライアントの切断やハンドラの終了時には、受信リクエストの Context がキャンセルされます。DB ドライバーなど呼び出し先のキャンセル対応も必要です。Context は実行中の処理を強制停止するものではありません。HTTP クライアントには `http.NewRequestWithContext` を使い、待機やループも `ctx.Done()` を監視します。Context を構造体に保存せず、処理ごとに第1引数で渡します。Context の値を任意引数のように使う（optional parameter bag）ことは避け、業務上必要な値は明示的な引数で渡します。
 
 ## 期限と時間予算
 

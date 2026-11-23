@@ -38,7 +38,7 @@ OpenTelemetry の成熟度は、言語とシグナルごとに異なります。
 
 ## span と相関
 
-HTTP の受信時に標準の伝播形式から親 Context を抽出し、サーバー span を開始します。呼び出し先の HTTP 要求にも Context と伝播ヘッダーを注入します。対応する middleware やクライアント計装を使えば、この処理を共通化できます。信頼できない外部入力のヘッダーや baggage は、そのままログへの出力や業務判断には使いません。
+第18章で見たとおり、Context は処理の期限とキャンセルを伝えます。OpenTelemetry では、同じ Context が span の親子関係（trace context）も運びます。HTTP の受信時に標準の伝播形式から親 Context を抽出し、サーバー span を開始します。呼び出し先の HTTP 要求にも Context と伝播ヘッダーを注入します。対応する middleware やクライアント計装を使えば、この処理を共通化できます。信頼できない外部入力のヘッダーや baggage は、そのままログへの出力や業務判断には使いません。
 
 以下は UseCase の操作を span にする例です。`tracer` は `go.opentelemetry.io/otel/trace` の `Tracer` で、初期化済みの provider から作って注入します。
 

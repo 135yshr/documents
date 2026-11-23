@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS orders (
 type createHooks struct {
 	// beforeCommit が返したエラーを返すと、トランザクションはロールバックされます。
 	beforeCommit func() error
+	// afterCommit は commit の成功後、呼び出し元へ返す前に呼ばれます。
+	// エラーを返すと、commit 済みでも呼び出し元にはエラーが返ります。
+	// 応答が呼び出し元へ届かなかった場面を再現するために使います。
+	afterCommit func() error
 }
 
 // CreateOrder は principal と key の組で注文作成を一度だけ適用します。
@@ -131,6 +135,11 @@ func createOrder(ctx context.Context, db *sql.DB, h createHooks, principal, key 
 	}
 	if err = tx.Commit(); err != nil {
 		return 0, nil, err
+	}
+	if h.afterCommit != nil {
+		if err := h.afterCommit(); err != nil {
+			return 0, nil, err
+		}
 	}
 	return http.StatusCreated, response, nil
 }

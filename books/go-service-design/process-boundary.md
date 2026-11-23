@@ -107,11 +107,20 @@ func Confirm(ctx context.Context, db *sql.DB, orderID string) error {
 
 `Commit` の応答が失われた場合は処理結果が不明です。呼び出し側の再試行には、後述の HTTP Idempotency Key など、別途コマンドの重複対策が必要です。イベント ID だけでは新しいリクエストによる二重実行を防げません。
 
+`Confirm` は、確定済みの注文に再度呼ぶと `sql.ErrNoRows` を返し、Outbox には記録しません。この性質は `TestConfirmWritesOrderAndOutboxTogether` で確認しています。ただし、commit の応答を失った呼び出し元は、この `ErrNoRows` を「すでに確定した」のか「確定できなかった」のか区別できません。区別が必要なら、結果を問い合わせる手段や HTTP Idempotency Key を使います。
+
 ## 配送ワーカーと at-least-once
 
 複数ワーカーで同じ行を同時に取得しないよう、短い DB トランザクションで行をリースします。ネットワーク送信中は DB ロックを保持しません。下記は1件ずつ処理する例です。`Publish` は、ブローカー側で永続化されたことを確認する ACK を待ち、確認できない場合はエラーを返すアダプターです。ブローカーの永続化設定、購読、ACK と再配信の設定も必要です。単にクライアントの送信バッファへ入れるだけでは保証になりません。
 
-ただし、この `DispatchOne` は参考実装です。本書のテストは、この関数と SQL を実 DB で実行していません。リース、再送、DLQ への移動は、本章末尾の未確認項目として実装時に検証してください。
+この `DispatchOne` と Outbox の SQL は `example/idempotency/outbox.go` にあります。パッケージ名は `idempotency` で、同じパッケージの注文 ID 生成と名前が重なるため `newID` は `newEventID` にしています。SQL と処理の流れは本文と同じです。次の挙動を、実 PostgreSQL のテストで確認しています。
+
+- 複数のワーカーが同じ行を同時に取り出さないこと。`TestDispatchOneSkipsLockedRows` は、ロック中の行を飛ばすことを確かめます。`TestConcurrentDispatchersPublishEachEventOnce` は、4つのワーカーで30件を配送します。`TestLeasedRowIsNotTakenByAnotherWorker` は、送信中の行を取らないことを確かめます
+- 送信に失敗したとき、試行回数と次の試行時刻を記録すること（`TestPublishFailureSchedulesRetry`）
+- 上限回数で `dead_at` を設定し、取り出し対象から外すこと。`TestDispatchOneMarksDeadAfterMaxAttempts` と `TestPermanentErrorMarksDeadImmediately` で確かめています
+- リースが切れた行を別のワーカーが取り直し、旧ワーカーは結果を記録できないこと。`TestExpiredLeaseIsRetakenAndOldWorkerLosesLease` は、新しいワーカーが先に終わる場合です。`TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease` は、旧ワーカーが先に戻る場合です
+
+リースの期限切れは、`lease_until` を過去に書き換えて再現しています。30秒の経過は待っていません。確認できていないことは、章末の「検証の観点」にまとめています。
 
 ```go
 package delivery
@@ -225,6 +234,8 @@ func DispatchOne(ctx context.Context, db *sql.DB, broker Broker) (bool, error) {
 
 呼び出し側は `false` のとき短時間待機し、DB エラー時も backoff を設けます。リース時間は送信タイムアウトより長く設定し、長時間処理には更新機構を追加します。期限切れ後に旧ワーカーが復帰しても、トークンが変わっていれば旧ワーカーは状態を上書きできません。ただし旧ワーカーによる送信自体は止められず、重複します。成功 ACK の喪失も同様です。更新件数が0なら `ErrLeaseLost` を返すため、呼び出し側で `errors.Is` を使って検出し、監視します。
 
+再試行の待ち時間の上限は、1秒から倍々に増えて1分で止まります。実際の待ち時間は、0 から上限までの乱数です（full jitter）。1回目から12回目の失敗まで、待ち時間がこの範囲に収まることを `TestDelayIsFullJitterWithExponentialCap` で確認しています。
+
 永続化した未配送行を繰り返し処理し、ブローカーも永続化と再配信を適切に設定することで、障害回復後の at-least-once を目指します。無期限に配送を保証するものではありません。保存期間、ブローカーの耐久性、障害の復旧、DLQ の対応が前提です。
 
 ## Consumer の冪等性
@@ -269,7 +280,7 @@ func decodeOrderConfirmed(m Message) (OrderConfirmedV1, error) {
     return e, nil
 }
 
-// ApplyPoints は、同じイベントを何度受け取っても加算を一度だけ適用します。
+// ApplyPoints は、同じイベント ID の加算を、処理済みの記録と同じトランザクションで一度だけ適用します。
 // applied が false の場合は、処理済みのイベントです。
 func ApplyPoints(ctx context.Context, db *sql.DB, e OrderConfirmedV1) (applied bool, err error) {
     if e.EventID == "" || e.CustomerID == "" || e.TotalAmount < 0 {
@@ -308,7 +319,13 @@ func ApplyPoints(ctx context.Context, db *sql.DB, e OrderConfirmedV1) (applied b
 
 上の関数は `example/idempotency/consumer.go` と同じ重複判定の手順を、`OrderConfirmedV1` の項目で書いたものです。同じ内容は `ApplyPoints` のテスト（`TestApplyPointsIgnoresRedeliveredEvent` など）で検証しています。配送メッセージは `decodeOrderConfirmed` で変換してから渡します。
 
-Consumer はこの関数が成功してからブローカーへ ACK します。コミット後、ACK 前に停止すれば再配信されますが、ユニーク制約が二重加算を防ぎます。エラー時は ACK せず、ブローカーの再配信または DLQ 方針に従います。外部 API 呼び出しはこの DB トランザクションに含まれません。外部側の冪等キーや Consumer 側の別 Outbox が必要です。処理済み ID は、ブローカーの保持期間と DLQ に再投入できる期間を含む、最大の再配信期間より長く保持します。
+Consumer はこの関数が成功してからブローカーへ ACK します。コミット後、ACK 前に停止すれば再配信されます。本書の実装では、処理済みの記録の主キー（`consumer` と `event_id`）が、同じイベントの2回目の処理を0行の INSERT にします。このとき加算は行いません。
+
+同じイベントが2つの Consumer へ同時に届いた場合は、後続の INSERT が先行の commit か rollback まで待ちます。先行が commit すれば後続は加算せず、rollback すれば後続が加算します。この挙動は2つのテストで確認しています。先行が commit する場合は `TestConcurrentApplyPointsAppliesOnce` です。rollback する場合は `TestConcurrentApplyPointsAfterRollbackAppliesFollower` です。
+
+業務更新の後に失敗した場合は、処理済みの記録も一緒にロールバックされ、再配信で処理できます。`TestApplyPointsRollsBackProcessedRecordWithBusinessUpdate` で確認しています。
+
+これらは、同じ DB と同じ Consumer 名での結果です。Consumer ごとに DB が別なら、この主キーでは重複を防げません。エラー時は ACK せず、ブローカーの再配信または DLQ 方針に従います。外部 API 呼び出しはこの DB トランザクションに含まれません。外部側の冪等キーや Consumer 側の別 Outbox が必要です。処理済み ID は、ブローカーの保持期間と DLQ に再投入できる期間を含む、最大の再配信期間より長く保持します。
 
 ## HTTP Idempotency Key
 
@@ -426,12 +443,16 @@ func CreateOrder(ctx context.Context, db *sql.DB, principal, key string, body []
 
 HTTP ハンドラは `Idempotency-Key` ヘッダーを取得し、認証・認可を済ませ、本文のサイズを制限したうえで呼び出します。`ErrKeyReuse` は 409、検証エラーは 400、処理結果不明を含む一時障害は再試行可能なエラーとして返します。この例は生の本文をハッシュするため、空白などが違う本文も別リクエストです。正規化するならその規則を契約に含めます。必要なレスポンスヘッダーも保存し、キーの保持期間と期限切れ後の再利用規則を公開します。外部呼び出しをこのトランザクション内に追加しても原子性は得られません。
 
+commit は成功したのに、応答が呼び出し元へ届かない場合も、同じキーで再試行できます。アプリケーションが commit の後にエラーを返す形でこの状況を再現すると、再試行は保存済みのレスポンスを返し、注文は増えません。`TestCommittedButResponseLostRetryReturnsStoredResponse` で確認しています。同じキーで本文が違えば、保存済みのハッシュと一致せず `ErrKeyReuse` になります。commit の前に失敗した場合は、キーの予約も残らず、再試行で新しく処理されます。`TestNotCommittedRetryProcessesRequest` で確認しています。
+
 ## retry、順序、DLQ の運用
 
 - retry: タイムアウトや一時的な接続障害は再試行します。指数 backoff と jitter で同時再試行を分散し、タイムアウト、上限回数、最大遅延を設定します。上の例の10回、最大1分は初期値であり、依存先の復旧時間と業務期限に合わせて調整します。認証・スキーマ不正などは原則として自動再試行しません。
 - 順序: 上の複数ワーカーと再試行は順序を保証しません。順序が必要なら、集約ごとの連番を状態変更と同一トランザクションで採番し、同じ集約を同じパーティションに送ります。配送側で前の未配送イベントを追い越させず、Consumer 側でも連番を検証し、欠番は保留・再取得します。DLQ に入った先行イベントが後続を止める場合の復旧方針も必要です。全体順序は別途設計します。
 - DLQ: 繰り返し失敗する poison message を隔離し、後続を無制限に止めないようにします。上の `dead_at` は送信側の DB 内の隔離場所です。Consumer 側でも、元のイベント ID、本文、失敗理由、試行回数を保持できる DLQ を用意します。DLQ への保存が確認できてから元メッセージを ACK し、保存失敗時は ACK しません。
 - 監視と復旧: 未配送件数、最古の未配送からの経過時間、配送失敗率、リース期限切れ、Consumer 遅延、DLQ 件数を監視します。たとえば配送遅延の目標を5分とし、最古の未配送が5分を超えたら通知します。目標と閾値は業務要件に合わせます。担当者は原因と契約・権限を確認し、修正後に同じ ID で再投入し、反映を確認します。個人情報の保持期間とアクセス権も定めます。
+
+再投入は、原因を直した後に `dead_at` を外し、`available_at` を現在に戻す運用で表せます。この更新の後、同じ ID のまま送られることを `TestDeadEventCanBeRequeuedWithSameID` で確認しています。ただし、この手順は `DispatchOne` の機能ではなく、運用の例です。
 
 再投入時に ID を変えると既存の重複排除を回避するため、原則として元の ID を保持します。内容の修正が必要なら、監査記録を残し、訂正イベントとして新しい ID を発行するかを業務上判断します。
 
@@ -443,14 +464,35 @@ HTTP ハンドラは `Idempotency-Key` ヘッダーを取得し、認証・認�
 
 ## 検証の観点
 
-実装時は、DB 更新後のロールバック、送信 ACK 後・配送済み記録前の停止、Consumer のコミット後・ACK 前の停止を障害注入で試します。本書の `example/idempotency` では、次を実 PostgreSQL で確認しています。
+実装時は、DB 更新後のロールバック、送信 ACK 後・配送済み記録前の停止、Consumer のコミット後・ACK 前の停止を障害注入で試します。本書の `example/idempotency` では、次を実 PostgreSQL（PostgreSQL 16 の一時インスタンス）で確認しています。
+
+HTTP Idempotency Key については、次の点です。
 
 - 同一 HTTP キーと同一本文の逐次の再試行が、同じ注文を二重に作らず保存済みレスポンスを返すこと
 - 同一キーと異なる本文が `ErrKeyReuse` で拒否されること
 - 同一キーの並行リクエストが、先行の commit 後には保存済みレスポンスを、先行の rollback 後には後続の処理を得ること
-- 同じ `order.confirmed.v1` の逐次の再配信で、ポイントが1回だけ加算されること
+- commit の成功後に応答が届かなかった状況を、アプリケーション内で再現した場合に、同じキーと本文の再試行が保存済みレスポンスを返すこと
 
-まだ確認していない項目もあります。障害注入による commit 応答の喪失、Consumer の並行配信、Outbox dispatcher の再送です。dispatcher には、`DispatchOne` のリース、再送、DLQ 移動を含みます。これらは実装時に追加して確かめてください。リース期限切れ、順序逆転、DLQ 再投入、保持期間切れを含め、復旧手順を定期的に演習します。
+Outbox と配送については、次の点です。
+
+- 注文の確定と Outbox への記録が、同じトランザクションで確定すること
+- 複数のワーカーが同じ行を同時に取り出さないこと、リースの期限切れ後に別のワーカーが取り直すこと、旧ワーカーが結果を記録できないこと
+- 送信失敗の記録、待ち時間の範囲、上限回数での `dead_at` の設定
+
+Consumer については、次の点です。
+
+- 同じ `order.confirmed.v1` の逐次の再配信で、ポイントが1回だけ加算されること
+- 同じイベントが2つの Consumer へ同時に届いても、加算が1回であること。先行が rollback した場合は後続が加算すること
+- 業務更新の後に失敗すると、処理済みの記録もロールバックされること
+
+次の項目は確認できていません。
+
+- commit 応答の喪失を、ネットワークの切断としては再現していません。DB ドライバーが commit の結果を受け取る前に接続が切れると、commit の成否は呼び出し元から分かりません。その状況は試していません。commit が成功した場合と失敗した場合の状態は、それぞれ上のテストで確かめています。ただし、切断した接続の commit が再試行と並行して終わる組み合わせは試していません。
+- 実際のメッセージブローカーとの連携は試していません。テストの `Broker` は、本章のインターフェースを満たす代用品です。
+- 複数のプロセスで動かした場合は試していません。並行のテストは、同じプロセス内の複数の goroutine（別々の DB 接続）で行っています。
+- リースの更新、実際の時間経過（30秒と10秒）、Consumer 側の DLQ、順序の逆転、保持期間切れは試していません。
+
+これらは実装時に追加して確かめてください。あわせて、復旧手順を定期的に演習します。
 
 ## 参考文献
 

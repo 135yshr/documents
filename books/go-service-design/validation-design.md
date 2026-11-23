@@ -6,7 +6,7 @@ title: "入力バリデーション設計〜3層での役割分担〜"
 
 :::message
 
-本章は DDD（ドメイン駆動設計）における入力バリデーションの設計指針をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に書名・章番号または URL で記載しています。
+本章は DDD（ドメイン駆動設計）における入力バリデーションの設計指針をまとめたものです。運用経験に基づく判断と、一次情報源で裏付けられる一般論を区別して書いています。一般論には、書名・章番号または URL を付けています。
 
 :::
 
@@ -22,7 +22,7 @@ title: "入力バリデーション設計〜3層での役割分担〜"
 
 本書では、バリデーションを、入力がシステムに到達してからドメインモデルに届くまでの間に段階的に行います。Vaughn Vernon は『Implementing Domain-Driven Design』（2013）Chapter 10で、集約が自身の不変条件を常に保護すべきだと述べています。
 
-バリデーションの層別配置は DDD コミュニティで広く議論されているテーマです。Vernon（IDDD, Chapter 5）は属性の自己検証・全体検証・遅延検証を区別しています。Khorikov（[Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/)）は入力バリデーションとドメイン不変条件を明確に分離しています。以下の3層モデルは、これらの先行議論と私の Go プロジェクトでの経験をもとに整理したものです。
+バリデーションの層別配置は DDD コミュニティで議論されているテーマです。Vernon（IDDD, Chapter 5）は属性の自己検証・全体検証・遅延検証を区別しています。Khorikov（[Validation and DDD](https://enterprisecraftsmanship.com/posts/validation-and-ddd/)）は入力バリデーションとドメイン不変条件を明確に分離しています。以下の3層モデルは、これらの先行議論と私の Go プロジェクトでの経験をもとに整理したものです。
 
 ```mermaid
 flowchart TD

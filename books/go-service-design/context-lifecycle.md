@@ -43,6 +43,8 @@ func (r *BookRepository) Find(ctx context.Context, id string) (Book, error) {
 
 クライアントの切断やハンドラの終了時には、受信リクエストの Context がキャンセルされます。DB ドライバーなど呼び出し先のキャンセル対応も必要です。Context は実行中の処理を強制停止するものではありません。HTTP クライアントには `http.NewRequestWithContext` を使い、待機やループも `ctx.Done()` を監視します。Context を構造体に保存せず、処理ごとに第1引数で渡します。Context の値を任意引数のように使う（optional parameter bag）ことは避け、業務上必要な値は明示的な引数で渡します。
 
+OpenTelemetry の span は Context に載って受け渡されます。そのため、下流へ同じ Context を渡すことは、キャンセルを伝えるだけでなく、trace をつなぐ条件にもなります。trace context の扱いは第20章で説明します。
+
 ## 期限と時間予算
 
 入口で応答時間の目標から上限を決め、下流の処理には残り時間を使わせます。たとえば全体が 800 ms なら、DB に最大 300 ms を割り当て、残りを他の処理や応答に使えます。
@@ -55,7 +57,7 @@ book, err := u.books.Find(dbCtx, id)
 
 親の期限が先に来る場合は、子もその時点で終了します。逐次処理にそれぞれ全体と同じ timeout を設定しても、親の残り時間は増えません。再試行の待機時間も予算に含め、残りがなければ再試行しないようにします。値はサービスの遅延目標や依存先の実測値を基に決めてください。
 
-`context.Canceled` と `context.DeadlineExceeded` は `errors.Is` で判別できます。切断、期限切れ、DB 障害を区別して記録します。ただしキャンセルは書き込みの取り消しやロールバックの完了を保証しません。外部操作が成功した直後に応答が失われることもあるため、再試行する書き込みには冪等性も検討します。
+`context.Canceled` と `context.DeadlineExceeded` は `errors.Is` で判別できます。切断、期限切れ、DB 障害を区別して記録します。ただしキャンセルは書き込みの取り消しやロールバックの完了を保証しません。外部操作が成功した直後に応答が失われることもあるため、再試行する書き込みには冪等性も検討します。この問題は第19章で扱います。
 
 ## goroutine の所有者を決める
 
@@ -85,7 +87,7 @@ func (u *Dashboard) Load(ctx context.Context, id string) (Summary, error) {
 
 `errgroup` は `golang.org/x/sync/errgroup` を使います。各 goroutine は別の変数に書き込み、`Wait` の後に結果を読みます。子処理が Context を無視すれば `Wait` は待ち続けるため、各依存先も協調する必要があります。大量の項目を処理する場合は `SetLimit` などで並行数を制限します。`Wait` 後のグループ Context はキャンセル済みなので、後続処理には元の親 Context を使います。
 
-リクエスト後も続く仕事は、リクエストの goroutine に押し込まず、キューに永続化するなどして Worker に引き渡します。Worker はアプリケーションが所有し、リクエストとは別の寿命で停止・待機します。
+リクエスト後も続く仕事は、リクエストの goroutine に押し込まず、キューに永続化するなどして Worker に引き渡します。プロセスをまたいで引き渡す場合の信頼性は、第19章で扱います。Worker はアプリケーションが所有し、リクエストとは別の寿命で停止・待機します。
 
 ## graceful shutdown
 

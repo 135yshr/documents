@@ -79,7 +79,7 @@ func runWithDatabase(m *testing.M) int {
 		panic(err)
 	}
 	defer db.Close()
-	if _, err := db.Exec(Schema + ConsumerSchema); err != nil {
+	if _, err := db.Exec(Schema + ConsumerSchema + OutboxSchema); err != nil {
 		panic(err)
 	}
 	testDB = db
@@ -122,7 +122,7 @@ func freePort() (uint32, error) {
 
 func reset(t *testing.T) {
 	t.Helper()
-	if _, err := testDB.Exec(`TRUNCATE http_requests, orders, processed_events, point_accounts`); err != nil {
+	if _, err := testDB.Exec(`TRUNCATE http_requests, orders, processed_events, point_accounts, outbox`); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -444,7 +444,7 @@ func TestDuplicateKeyInsertAfterCommitByIsolationLevel(t *testing.T) {
 func TestApplyPointsIgnoresRedeliveredEvent(t *testing.T) {
 	reset(t)
 	ctx := context.Background()
-	e := OrderConfirmed{EventID: "evt-1", CustomerID: "customer-1", TotalAmount: 1200}
+	e := OrderConfirmedV1{EventID: "evt-1", CustomerID: "customer-1", TotalAmount: 1200}
 
 	applied, err := ApplyPoints(ctx, testDB, e)
 	if err != nil || !applied {
@@ -465,7 +465,7 @@ func TestApplyPointsIgnoresRedeliveredEvent(t *testing.T) {
 
 func TestApplyPointsRejectsInvalidEvent(t *testing.T) {
 	reset(t)
-	_, err := ApplyPoints(context.Background(), testDB, OrderConfirmed{CustomerID: "customer-1"})
+	_, err := ApplyPoints(context.Background(), testDB, OrderConfirmedV1{CustomerID: "customer-1"})
 	if err == nil {
 		t.Fatal("event id が空のイベントを受け入れました")
 	}

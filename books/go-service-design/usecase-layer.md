@@ -264,7 +264,7 @@ Handler → UseCase → Repository → Domain Model
 Handler層はUseCaseのDTOだけを知る
 ```
 
-Handler 層のテストでも、UseCase の振る舞いだけをモックすれば済みます。ドメインモデルを変更しても Handler のテストは壊れません。
+Handler 層のテストでも、UseCase の振る舞いだけをモックすれば済みます。Input/Output DTO が変わらない限り、ドメインモデルの変更で Handler のテストは壊れにくくなります。
 
 ---
 

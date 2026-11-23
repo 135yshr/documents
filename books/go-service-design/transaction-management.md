@@ -104,7 +104,7 @@ func (i *PlaceOrderInteractor) Execute(ctx context.Context, input PlaceOrderInpu
 }
 ```
 
-`fn`がエラーを返せばロールバックし、nil を返せばコミットを試みます。境界の決定権は UseCase 層にあり、`*sql.Tx`は登場しません。コミット時の通信障害では結果が不明になることもあるため、単純に処理全体を再実行してよいとは限りません。
+`fn`がエラーを返せばロールバックし、nil を返せばコミットを試みます。境界の決定権は UseCase 層にあり、`*sql.Tx`は登場しません。コミット時の通信障害では結果が不明になることもあるため、単純に処理全体を再実行してよいとは限りません。この問題は、第19章で扱う HTTP Idempotency Key の対象です。
 
 ### infrastructure 層の実装：Tx に束縛した Repository を作る
 

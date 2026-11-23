@@ -272,15 +272,16 @@ func TestConcurrentDispatchersPublishEachEventOnce(t *testing.T) {
 // 送信中の行はリースされているため、別のワーカーは取り出しません。
 func TestLeasedRowIsNotTakenByAnotherWorker(t *testing.T) {
 	reset(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	insertEvent(t, "evt-1")
 
 	inPublish := make(chan struct{})
 	release := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })
 	var wg sync.WaitGroup
-	// 途中で失敗しても、止めたワーカーを解放し、終了を待ってから次のテストへ進みます。
-	t.Cleanup(func() { releaseOnce(); wg.Wait() })
+	// 途中で失敗しても、止めたワーカーを解放し、進行中の DB 処理を取り消して、
+	// 終了を待ってから次のテストへ進みます。
+	t.Cleanup(func() { releaseOnce(); cancel(); wg.Wait() })
 	slow := brokerFunc(func(context.Context, Message) error {
 		close(inPublish)
 		<-release
@@ -310,7 +311,7 @@ func TestLeasedRowIsNotTakenByAnotherWorker(t *testing.T) {
 // ErrLeaseLost を受け取ります。ただし旧ワーカーの送信自体は止められないため、ブローカーには2回届きます。
 func TestExpiredLeaseIsRetakenAndOldWorkerLosesLease(t *testing.T) {
 	reset(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	insertEvent(t, "evt-1")
 
 	var mu sync.Mutex
@@ -324,7 +325,7 @@ func TestExpiredLeaseIsRetakenAndOldWorkerLosesLease(t *testing.T) {
 	release := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })
 	var wg sync.WaitGroup
-	t.Cleanup(func() { releaseOnce(); wg.Wait() })
+	t.Cleanup(func() { releaseOnce(); cancel(); wg.Wait() })
 	stalled := brokerFunc(func(_ context.Context, m Message) error {
 		close(inPublish)
 		<-release
@@ -367,7 +368,7 @@ func TestExpiredLeaseIsRetakenAndOldWorkerLosesLease(t *testing.T) {
 // 旧ワーカーは配送済みにできず（リースのトークンが違うため）、行は新しいワーカーのリースのまま残ります。
 func TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease(t *testing.T) {
 	reset(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	insertEvent(t, "evt-1")
 
 	oldIn, oldRelease := make(chan struct{}), make(chan struct{})
@@ -375,7 +376,7 @@ func TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease(t *testing.T) {
 	oldOnce := sync.OnceFunc(func() { close(oldRelease) })
 	newOnce := sync.OnceFunc(func() { close(newRelease) })
 	var wg sync.WaitGroup
-	t.Cleanup(func() { oldOnce(); newOnce(); wg.Wait() })
+	t.Cleanup(func() { oldOnce(); newOnce(); cancel(); wg.Wait() })
 
 	oldDone := make(chan error, 1)
 	wg.Add(1)

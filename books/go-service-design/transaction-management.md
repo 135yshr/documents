@@ -21,7 +21,7 @@ func (i *PlaceOrderInteractor) Execute(ctx context.Context, input PlaceOrderInpu
 }
 ```
 
-これは第3章の依存性ルールに真っ向から違反します。UseCase 層が具体的な DB アクセスに依存してしまい、テストにも DB が必要になります。この章では、単一 DB のローカルトランザクションに限って、**境界の決定権**を UseCase 層に残したまま、**開始とコミットの実装**を infrastructure 層に閉じ込める方法を整理します。
+これは第3章の依存性ルールに真っ向から違反します。UseCase 層が具体的な DB アクセスに依存してしまい、テストにも DB が必要になります。この章では、単一 DB のローカルトランザクションに限って、境界の決定権を UseCase 層に残したまま、開始とコミットの実装を infrastructure 層に閉じ込める方法を整理します。
 
 ---
 

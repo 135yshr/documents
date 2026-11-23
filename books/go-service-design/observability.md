@@ -27,8 +27,8 @@ OpenTelemetry（OTel）は計装の API、SDK、データモデルなどを提�
 
 OpenTelemetry の成熟度は、言語とシグナルごとに異なります。2026年11月21日に、2つの公式情報を確認しました。両者の表示は一致していません。
 
-- **ステータスページ**: OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)の表示です。Go の Traces と Metrics は Stable、Logs は Release candidate です。
-- **リリース**: OpenTelemetry Go の [v1.47.0](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0) は、2026年10月2日に公開されました。このリリースは、Logs の API と SDK の最初の安定版です。対象は `go.opentelemetry.io/otel/log` と `go.opentelemetry.io/otel/sdk/log` です。
+- ステータスページ: OpenTelemetry 公式の[ステータスページ](https://opentelemetry.io/status/)の表示です。Go の Traces と Metrics は Stable、Logs は Release candidate です。
+- リリース: OpenTelemetry Go の [v1.47.0](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.47.0) は、2026年10月2日に公開されました。このリリースは、Logs の API と SDK の最初の安定版です。対象は `go.opentelemetry.io/otel/log` と `go.opentelemetry.io/otel/sdk/log` です。
 
 つまり、Logs の API と SDK は v1.47.0 以降で安定版ですが、ステータスページの表示は確認時点で更新されていません。一方、同じリポジトリの `versions.yaml` では、OTLP のログ exporter（`otlploggrpc`、`otlploghttp`）は v1 ではなく実験的なモジュール群に含まれています。Logs を OTLP で送る構成では、API と SDK だけでなく exporter の安定度も確認してください。ステータスは変わるため、採用時には利用するバージョンのリリースノートを確認します。
 

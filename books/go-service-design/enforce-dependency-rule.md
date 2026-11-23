@@ -23,7 +23,7 @@ Go は直接・間接を問わずパッケージの import 循環をビルド時
 
 ## まず一つの禁止を検査する
 
-次の Bash 例は、モジュールパスを `example.com/reading` とする単一モジュールのルートで実行します。`internal/catalog/domain` とその子パッケージによる `internal/catalog/adapter` とその子パッケージへの**直接 import**を検出します。パスの区切りまで比較するため、`adapterextra` は対象に含みません。
+次の Bash 例は、モジュールパスを `example.com/reading` とする単一モジュールのルートで実行します。`internal/catalog/domain` とその子パッケージによる `internal/catalog/adapter` とその子パッケージへの直接 import を検出します。パスの区切りまで比較するため、`adapterextra` は対象に含みません。
 
 ```bash
 set -o pipefail

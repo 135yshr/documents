@@ -4,7 +4,7 @@ title: "読書ログサービスを実装する〜最小構成で動かして育
 
 ## 第24章：読了までの実装を追う
 
-第23章で決めた読書ログサービスを、内側から外側へたどります。`example/booklog` は Go の標準ライブラリを使う学習用サンプルです。`Reading` 集約、`CompleteReading`、インメモリのトランザクションと Outbox、HTTP、worker を通して、状態変更から後続処理までを確認します。
+第23章で決めた読書ログサービスを、内側から外側へたどります。[booklog](https://github.com/135yshr/go-service-design-examples/tree/v1.0.0/booklog) は Go の標準ライブラリを使う学習用サンプルです。`Reading` 集約、`CompleteReading`、インメモリのトランザクションと Outbox、HTTP、worker を通して、状態変更から後続処理までを確認します。
 
 完全な `book`、`reading`、`review`、`user` の各機能を実装する章ではありません。外部書誌 API、認証、感想、永続 DB、実際のメッセージブローカーや OpenTelemetry SDK もサンプルの前提ではありません。以下の図や擬似コードは理解のための説明であり、サンプルの API 定義そのものではありません。
 
@@ -55,14 +55,15 @@ curl -i -X POST http://localhost:8080/readings/demo/complete
 
 worker は Outbox の未処理イベントを取得し、Consumer へ渡します。Consumer が成功した後に配送済みとして記録することで、処理前にイベントを失う危険を減らします。一方、Consumer の成功後、配送済みの記録前に失敗すれば、同じイベントを再配送する必要があります。
 
-サンプルの Consumer はイベント ID ごとに処理済みかを確認し、カウンターを増やす処理と処理済みの記録を同じロックで保護します。学習用のインメモリ実装では、処理済み情報もプロセス終了時に失われます。実運用では後続の業務データ変更と処理済み ID の保存を同一トランザクションに含めるなど、永続的な冪等性の設計が必要です。その実装例とテストは、第19章の `example/idempotency` にあります。外部サービスへの副作用を含む場合は、相手側の冪等性キーなども検討します。
+サンプルの Consumer はイベント ID ごとに処理済みかを確認し、カウンターを増やす処理と処理済みの記録を同じロックで保護します。学習用のインメモリ実装では、処理済み情報もプロセス終了時に失われます。実運用では後続の業務データ変更と処理済み ID の保存を同一トランザクションに含めるなど、永続的な冪等性の設計が必要です。その実装例とテストは、第19章の [idempotency](https://github.com/135yshr/go-service-design-examples/tree/v1.0.0/idempotency) にあります。外部サービスへの副作用を含む場合は、相手側の冪等性キーなども検討します。
 
 ## 5. 確認の進め方
 
-サンプルのルートで、まず既存のテストを実行します。
+サンプルのリポジトリを取得し、`booklog` で、まず既存のテストを実行します。
 
 ```bash
-cd books/go-service-design/example/booklog
+git clone --branch v1.0.0 https://github.com/135yshr/go-service-design-examples.git
+cd go-service-design-examples/booklog
 go test ./...
 ```
 

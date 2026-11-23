@@ -113,7 +113,7 @@ func Confirm(ctx context.Context, db *sql.DB, orderID string) error {
 
 複数ワーカーで同じ行を同時に取得しないよう、短い DB トランザクションで行をリースします。ネットワーク送信中は DB ロックを保持しません。下記は1件ずつ処理する例です。`Publish` は、ブローカー側で永続化されたことを確認する ACK を待ち、確認できない場合はエラーを返すアダプターです。ブローカーの永続化設定、購読、ACK と再配信の設定も必要です。単にクライアントの送信バッファへ入れるだけでは保証になりません。
 
-この `DispatchOne` と Outbox の SQL は `example/idempotency/outbox.go` にあります。パッケージ名は `idempotency` で、同じパッケージの注文 ID 生成と名前が重なるため `newID` は `newEventID` にしています。SQL と処理の流れは本文と同じです。次の挙動を、実 PostgreSQL のテストで確認しています。
+この `DispatchOne` と Outbox の SQL は [`idempotency/outbox.go`](https://github.com/135yshr/go-service-design-examples/blob/v1.0.0/idempotency/outbox.go) にあります。パッケージ名は `idempotency` で、同じパッケージの注文 ID 生成と名前が重なるため `newID` は `newEventID` にしています。SQL と処理の流れは本文と同じです。次の挙動を、実 PostgreSQL のテストで確認しています。
 
 - 複数のワーカーが同じ行を同時に取り出さないこと。`TestDispatchOneSkipsLockedRows` は、ロック中の行を飛ばすことを確かめます。`TestConcurrentDispatchersPublishEachEventOnce` は、4つのワーカーで30件を配送します。`TestLeasedRowIsNotTakenByAnotherWorker` は、送信中の行を取らないことを確かめます
 - 送信に失敗したとき、試行回数と次の試行時刻を記録すること（`TestPublishFailureSchedulesRetry`）
@@ -335,7 +335,7 @@ func ApplyPoints(ctx context.Context, db *sql.DB, e OrderConfirmedV1) (applied b
 }
 ```
 
-上の関数は `example/idempotency/consumer.go` と同じ重複判定の手順を、`OrderConfirmedV1` の項目で書いたものです。同じ内容は `ApplyPoints` のテスト（`TestApplyPointsIgnoresRedeliveredEvent` など）で検証しています。配送メッセージは `decodeOrderConfirmed` で変換してから渡します。
+上の関数は [`idempotency/consumer.go`](https://github.com/135yshr/go-service-design-examples/blob/v1.0.0/idempotency/consumer.go) と同じ重複判定の手順を、`OrderConfirmedV1` の項目で書いたものです。同じ内容は `ApplyPoints` のテスト（`TestApplyPointsIgnoresRedeliveredEvent` など）で検証しています。配送メッセージは `decodeOrderConfirmed` で変換してから渡します。
 
 Consumer はこの関数が成功してからブローカーへ ACK します。コミット後、ACK 前に停止すれば再配信されます。本書の実装では、処理済みの記録の主キー（`consumer` と `event_id`）が、同じイベントの2回目の処理を0行の INSERT にします。このとき加算は行いません。
 
@@ -353,7 +353,7 @@ HTTP クライアントのタイムアウトでは、サーバーが処理済み
 
 この説明は、PostgreSQL 16 の公式ドキュメントの記述と、本書のサンプルでの確認結果に基づきます。公式ドキュメントによると、PostgreSQL の既定の分離レベルは `READ COMMITTED` です。この分離レベルでは、各文はその文の開始時点までに commit されたデータを見ます（MVCC のスナップショット）。一意インデックスへの挿入は、競合する行を未 commit のトランザクションが挿入していた場合、そのトランザクションの終了を待ちます。また、他のトランザクションの結果が INSERT のスナップショットから見えない場合があります。その状況で `ON CONFLICT DO NOTHING` が挿入しないのは、`READ COMMITTED` の場合だけだと明記されています。
 
-待ち方と読み取りの結果は分離レベルに依存し、`REPEATABLE READ` では同じ INSERT が直列化失敗（SQLSTATE `40001`）になります。そのためアプリケーション側で再試行が必要です。別のデータベースや分離レベルで同じ保証を前提にしてはいけません。待ち時間には、`lock_timeout` や `context` の期限で上限を設けます。サンプルとテストは `example/idempotency` にあります。テストは PostgreSQL 16 の一時インスタンスを使い、commit 後・rollback 後の並行リクエストと、分離レベルごとの違いを確認しています。
+待ち方と読み取りの結果は分離レベルに依存し、`REPEATABLE READ` では同じ INSERT が直列化失敗（SQLSTATE `40001`）になります。そのためアプリケーション側で再試行が必要です。別のデータベースや分離レベルで同じ保証を前提にしてはいけません。待ち時間には、`lock_timeout` や `context` の期限で上限を設けます。サンプルとテストは [idempotency](https://github.com/135yshr/go-service-design-examples/tree/v1.0.0/idempotency) にあります。テストは PostgreSQL 16 の一時インスタンスを使い、commit 後・rollback 後の並行リクエストと、分離レベルごとの違いを確認しています。
 
 ```sql
 CREATE TABLE http_requests (
@@ -484,7 +484,7 @@ commit は成功したのに、応答が呼び出し元へ届かない場合も�
 
 ## 検証の観点
 
-実装時は、DB 更新後のロールバック、送信 ACK 後・配送済み記録前の停止、Consumer のコミット後・ACK 前の停止を障害注入で試します。本書の `example/idempotency` では、次を実 PostgreSQL（PostgreSQL 16 の一時インスタンス）で確認しています。
+実装時は、DB 更新後のロールバック、送信 ACK 後・配送済み記録前の停止、Consumer のコミット後・ACK 前の停止を障害注入で試します。サンプルの [idempotency](https://github.com/135yshr/go-service-design-examples/tree/v1.0.0/idempotency) では、次を実 PostgreSQL（PostgreSQL 16 の一時インスタンス）で確認しています。
 
 HTTP Idempotency Key については、次の点です。
 

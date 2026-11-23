@@ -132,14 +132,27 @@ func delay(attempt int) time.Duration {
 // DispatchOne は、配送待ちの行を1件リースし、ブローカーへ送って結果を記録します。
 // 配送待ちの行がなければ false を返します。
 func DispatchOne(ctx context.Context, db *sql.DB, broker Broker) (bool, error) {
+	// リースが切れたまま上限回数に達した行は、再送せずに dead_at を設定します。
+	// 結果を記録できなかった試行は、ブローカーが拒否したことを意味しません。結果が不明のまま
+	// 試行回数だけが増え続けないよう、上限を超える前に人の判断へ回します。
+	if _, err := db.ExecContext(ctx, `
+        UPDATE outbox SET dead_at = now(), lease_token = NULL, lease_until = NULL,
+                          last_error = 'lease expired at max attempts'
+        WHERE published_at IS NULL AND dead_at IS NULL
+          AND attempts >= $1 AND lease_until < now()`, maxAttempts); err != nil {
+		return false, err
+	}
+
 	token, err := newEventID()
 	if err != nil {
 		return false, err
 	}
 	var m Message
 	var attempts int
+	// lease_until は行を書き込む時点から数えます。now() は文の開始時刻で固定されるため、
+	// 行ロックの待ちが長引いた場合に、リースが実際より短くなります。
 	err = db.QueryRowContext(ctx, `
-        UPDATE outbox SET lease_token = $1, lease_until = now() + interval '30 seconds',
+        UPDATE outbox SET lease_token = $1, lease_until = clock_timestamp() + interval '30 seconds',
                           attempts = attempts + 1
         WHERE event_id = (
             SELECT event_id FROM outbox

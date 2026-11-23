@@ -118,9 +118,14 @@ func Confirm(ctx context.Context, db *sql.DB, orderID string) error {
 - 複数のワーカーが同じ行を同時に取り出さないこと。`TestDispatchOneSkipsLockedRows` は、ロック中の行を飛ばすことを確かめます。`TestConcurrentDispatchersPublishEachEventOnce` は、4つのワーカーで30件を配送します。`TestLeasedRowIsNotTakenByAnotherWorker` は、送信中の行を取らないことを確かめます
 - 送信に失敗したとき、試行回数と次の試行時刻を記録すること（`TestPublishFailureSchedulesRetry`）
 - 上限回数で `dead_at` を設定し、取り出し対象から外すこと。`TestDispatchOneMarksDeadAfterMaxAttempts` と `TestPermanentErrorMarksDeadImmediately` で確かめています
+- 上限回数目の試行で結果を記録できず、リースが切れた行は、11回目を始めず `dead_at` を設定すること。`TestExpiredLeaseAtMaxAttemptsIsDeadLettered` は、リースが切れた行を直接用意します。`TestCanceledAtMaxAttemptsIsDeadLetteredAfterLeaseExpiry` は、Context の終了から再現します。上限の手前の行は取り直し、こちらは `TestExpiredLeaseBelowMaxAttemptsIsStillRetaken` で確かめます
 - リースが切れた行を別のワーカーが取り直し、旧ワーカーは結果を記録できないこと。`TestExpiredLeaseIsRetakenAndOldWorkerLosesLease` は、新しいワーカーが先に終わる場合です。`TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease` は、旧ワーカーが先に戻る場合です
 
-リースの期限切れは、`lease_until` を過去に書き換えて再現しています。30秒の経過は待っていません。確認できていないことは、章末の「検証の観点」にまとめています。
+リースの期限切れは、`lease_until` を過去に書き換えて再現しています。30秒の経過は待っていません。
+
+リースの期限には `clock_timestamp()` を使います。PostgreSQL の `now()` は、現在のトランザクションの開始時刻を返すためです。1文だけの自動コミットでも、その文が行ロックなどで待たされると、`now()` は待つ前の時刻のままです。`clock_timestamp()` は文の実行中も進む実際の現在時刻を返すため、リースを書き込む時点から数えられます。この違いは公式ドキュメントの記述に基づいており、ロック待ちが長引く状況を作ったテストは書いていません。
+
+上限回数の扱いにも注意します。呼び出し元の Context が終わるなどして結果を記録できなかった試行は、ブローカーが拒否したことを意味しません。結果が不明のまま試行だけが増え続けないよう、上限に達してリースが切れた行は、再送せずに `dead_at` を設定します。この行は人の判断に回し、送信されたかどうかをブローカー側で確認してから再投入します。確認できていないことは、章末の「検証の観点」にまとめています。
 
 ```go
 package delivery
@@ -134,6 +139,9 @@ import (
     "math/rand"
     "time"
 )
+
+// maxAttempts は、配送を諦めて dead_at を設定するまでの試行回数です。
+const maxAttempts = 10
 
 type Message struct {
     ID, Type, AggregateID string
@@ -177,14 +185,24 @@ func delay(attempt int) time.Duration {
 }
 
 func DispatchOne(ctx context.Context, db *sql.DB, broker Broker) (bool, error) {
+    // リースが切れたまま上限回数に達した行は、再送せずに dead_at を設定します。
+    if _, err := db.ExecContext(ctx, `
+        UPDATE outbox SET dead_at = now(), lease_token = NULL, lease_until = NULL,
+                          last_error = 'lease expired at max attempts'
+        WHERE published_at IS NULL AND dead_at IS NULL
+          AND attempts >= $1 AND lease_until < now()`, maxAttempts); err != nil {
+        return false, err
+    }
+
     token, err := newID()
     if err != nil {
         return false, err
     }
     var m Message
     var attempts int
+    // lease_until は、行を書き込む時点から数えます。
     err = db.QueryRowContext(ctx, `
-        UPDATE outbox SET lease_token = $1, lease_until = now() + interval '30 seconds',
+        UPDATE outbox SET lease_token = $1, lease_until = clock_timestamp() + interval '30 seconds',
                           attempts = attempts + 1
         WHERE event_id = (
             SELECT event_id FROM outbox
@@ -216,7 +234,7 @@ func DispatchOne(ctx context.Context, db *sql.DB, broker Broker) (bool, error) {
         return true, ctx.Err() // リースの期限切れ後に再試行します。
     }
     var permanent Permanent
-    dead := attempts >= 10 || (errors.As(err, &permanent) && permanent.Permanent())
+    dead := attempts >= maxAttempts || (errors.As(err, &permanent) && permanent.Permanent())
     // エラー文字列には機密情報を含めず、サイズを制限します。
     reason := "publish failed"
     result, updateErr := db.ExecContext(ctx, `
@@ -454,6 +472,8 @@ commit は成功したのに、応答が呼び出し元へ届かない場合も�
 
 再投入は、原因を直した後に `dead_at` を外し、`available_at` を現在に戻す運用で表せます。この更新の後、同じ ID のまま送られることを `TestDeadEventCanBeRequeuedWithSameID` で確認しています。ただし、この手順は `DispatchOne` の機能ではなく、運用の例です。
 
+`attempts` を戻さずに `dead_at` だけを外すと、次の失敗で再び `dead_at` が設定されます。再び試行の余地を与えるなら、`attempts` も 0 に戻します。どちらにするかは運用の判断で、2つの場合を `TestRequeuedEventKeepsAttemptsUnlessResetByOperator` で確かめています。
+
 再投入時に ID を変えると既存の重複排除を回避するため、原則として元の ID を保持します。内容の修正が必要なら、監査記録を残し、訂正イベントとして新しい ID を発行するかを業務上判断します。
 
 ## Saga を選ぶとき
@@ -478,6 +498,7 @@ Outbox と配送については、次の点です。
 - 注文の確定と Outbox への記録が、同じトランザクションで確定すること
 - 複数のワーカーが同じ行を同時に取り出さないこと、リースの期限切れ後に別のワーカーが取り直すこと、旧ワーカーが結果を記録できないこと
 - 送信失敗の記録、待ち時間の範囲、上限回数での `dead_at` の設定
+- 上限回数に達してリースが切れた行は、再送せず `dead_at` を設定すること
 
 Consumer については、次の点です。
 
@@ -491,6 +512,7 @@ Consumer については、次の点です。
 - 実際のメッセージブローカーとの連携は試していません。テストの `Broker` は、本章のインターフェースを満たす代用品です。
 - 複数のプロセスで動かした場合は試していません。並行のテストは、同じプロセス内の複数の goroutine（別々の DB 接続）で行っています。
 - リースの更新、実際の時間経過（30秒と10秒）、Consumer 側の DLQ、順序の逆転、保持期間切れは試していません。
+- `clock_timestamp()` と `now()` の違いが表れる、長いロック待ちの状況は試していません。
 
 これらは実装時に追加して確かめてください。あわせて、復旧手順を定期的に演習します。
 
@@ -505,4 +527,5 @@ Consumer については、次の点です。
 | 分離レベルと `ON CONFLICT` の挙動 | PostgreSQL 16 Documentation, [13.2. Transaction Isolation](https://www.postgresql.org/docs/16/transaction-iso.html) |
 | `INSERT ... ON CONFLICT` | PostgreSQL 16 Documentation, [INSERT](https://www.postgresql.org/docs/16/sql-insert.html) |
 | 一意性検査と未 commit 行の待機 | PostgreSQL 16 Documentation, [64.5. Index Uniqueness Checks](https://www.postgresql.org/docs/16/index-unique-checks.html) |
+| `now()` と `clock_timestamp()` | PostgreSQL 16 Documentation, [9.9. Date/Time Functions and Operators](https://www.postgresql.org/docs/16/functions-datetime.html) |
 | MVCC の概要 | PostgreSQL 16 Documentation, [13.1. Introduction](https://www.postgresql.org/docs/16/mvcc-intro.html) |

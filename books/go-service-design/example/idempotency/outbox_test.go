@@ -62,23 +62,43 @@ type outboxRow struct {
 	published   sql.NullTime
 	dead        sql.NullTime
 	lastError   sql.NullString
-	availableIn time.Duration // available_at - now()
+	availableAt time.Time
 }
 
 func readOutbox(t *testing.T, id string) outboxRow {
 	t.Helper()
 	var r outboxRow
-	var availableMs float64
 	err := testDB.QueryRow(`
-        SELECT attempts, lease_token, lease_until, published_at, dead_at, last_error,
-               EXTRACT(EPOCH FROM (available_at - now())) * 1000
+        SELECT attempts, lease_token, lease_until, published_at, dead_at, last_error, available_at
         FROM outbox WHERE event_id = $1`, id).
-		Scan(&r.attempts, &r.leaseToken, &r.leaseUntil, &r.published, &r.dead, &r.lastError, &availableMs)
+		Scan(&r.attempts, &r.leaseToken, &r.leaseUntil, &r.published, &r.dead, &r.lastError, &r.availableAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.availableIn = time.Duration(availableMs * float64(time.Millisecond))
 	return r
+}
+
+// dbNow は DB の現在時刻です。時刻の判定をアプリケーション側の時計に依存させないために使います。
+func dbNow(t *testing.T) time.Time {
+	t.Helper()
+	var now time.Time
+	if err := testDB.QueryRow(`SELECT clock_timestamp()`).Scan(&now); err != nil {
+		t.Fatal(err)
+	}
+	return now
+}
+
+// waitReached は、ワーカーが目的の位置（Publish の中など）に到達するまで待ちます。
+// 到達する前にワーカーが終了した場合は、そのエラーを報告します。
+func waitReached(t *testing.T, reached <-chan struct{}, done <-chan error) {
+	t.Helper()
+	select {
+	case <-reached:
+	case err := <-done:
+		t.Fatalf("ワーカーが目的の位置に到達する前に終了しました: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("ワーカーが目的の位置に到達しませんでした")
+	}
 }
 
 // expireLease は、リースを持ったワーカーが停止して期限が切れた状態を作ります。
@@ -258,18 +278,22 @@ func TestLeasedRowIsNotTakenByAnotherWorker(t *testing.T) {
 	inPublish := make(chan struct{})
 	release := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })
-	t.Cleanup(releaseOnce)
+	var wg sync.WaitGroup
+	// 途中で失敗しても、止めたワーカーを解放し、終了を待ってから次のテストへ進みます。
+	t.Cleanup(func() { releaseOnce(); wg.Wait() })
 	slow := brokerFunc(func(context.Context, Message) error {
 		close(inPublish)
 		<-release
 		return nil
 	})
 	done := make(chan error, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		_, err := DispatchOne(ctx, testDB, slow)
 		done <- err
 	}()
-	<-inPublish
+	waitReached(t, inPublish, done)
 
 	ok, err := DispatchOne(ctx, testDB, &recordingBroker{})
 	if err != nil || ok {
@@ -299,7 +323,8 @@ func TestExpiredLeaseIsRetakenAndOldWorkerLosesLease(t *testing.T) {
 	inPublish := make(chan struct{})
 	release := make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })
-	t.Cleanup(releaseOnce)
+	var wg sync.WaitGroup
+	t.Cleanup(func() { releaseOnce(); wg.Wait() })
 	stalled := brokerFunc(func(_ context.Context, m Message) error {
 		close(inPublish)
 		<-release
@@ -307,11 +332,13 @@ func TestExpiredLeaseIsRetakenAndOldWorkerLosesLease(t *testing.T) {
 		return nil
 	})
 	oldDone := make(chan error, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		_, err := DispatchOne(ctx, testDB, stalled)
 		oldDone <- err
 	}()
-	<-inPublish
+	waitReached(t, inPublish, oldDone)
 	expireLease(t, "evt-1")
 
 	ok, err := DispatchOne(ctx, testDB, brokerFunc(func(_ context.Context, m Message) error {
@@ -347,10 +374,13 @@ func TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease(t *testing.T) {
 	newIn, newRelease := make(chan struct{}), make(chan struct{})
 	oldOnce := sync.OnceFunc(func() { close(oldRelease) })
 	newOnce := sync.OnceFunc(func() { close(newRelease) })
-	t.Cleanup(func() { oldOnce(); newOnce() })
+	var wg sync.WaitGroup
+	t.Cleanup(func() { oldOnce(); newOnce(); wg.Wait() })
 
 	oldDone := make(chan error, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		_, err := DispatchOne(ctx, testDB, brokerFunc(func(context.Context, Message) error {
 			close(oldIn)
 			<-oldRelease
@@ -358,11 +388,13 @@ func TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease(t *testing.T) {
 		}))
 		oldDone <- err
 	}()
-	<-oldIn
+	waitReached(t, oldIn, oldDone)
 	expireLease(t, "evt-1")
 
 	newDone := make(chan error, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		_, err := DispatchOne(ctx, testDB, brokerFunc(func(context.Context, Message) error {
 			close(newIn)
 			<-newRelease
@@ -370,7 +402,7 @@ func TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease(t *testing.T) {
 		}))
 		newDone <- err
 	}()
-	<-newIn
+	waitReached(t, newIn, newDone)
 
 	oldOnce()
 	if err := <-oldDone; !errors.Is(err, ErrLeaseLost) {
@@ -429,10 +461,12 @@ func TestPublishFailureSchedulesRetry(t *testing.T) {
 	insertEvent(t, "evt-1")
 	failing := brokerFunc(func(context.Context, Message) error { return errPublish })
 
+	before := dbNow(t)
 	ok, err := DispatchOne(ctx, testDB, failing)
 	if err != nil || !ok {
 		t.Fatalf("DispatchOne = (%v, %v); want (true, nil)", ok, err)
 	}
+	after := dbNow(t)
 	r := readOutbox(t, "evt-1")
 	if r.attempts != 1 || r.published.Valid || r.dead.Valid || r.leaseToken.Valid || r.leaseUntil.Valid {
 		t.Fatalf("row = %+v; want attempts 1, not published, not dead, lease cleared", r)
@@ -440,9 +474,10 @@ func TestPublishFailureSchedulesRetry(t *testing.T) {
 	if !r.lastError.Valid || r.lastError.String != "publish failed" {
 		t.Fatalf("last_error = %v; want \"publish failed\"", r.lastError)
 	}
-	// 1回目の失敗後の待ち時間は 0〜1秒です。
-	if r.availableIn < -time.Second || r.availableIn > 1500*time.Millisecond {
-		t.Fatalf("available_at - now = %v; want within the first backoff window (<= 1s)", r.availableIn)
+	// 1回目の失敗後の待ち時間は 0〜1秒です。DispatchOne の前後の DB 時刻で挟み、
+	// テストが読み取るまでの遅れに左右されないようにします。
+	if r.availableAt.Before(before) || r.availableAt.After(after.Add(time.Second)) {
+		t.Fatalf("available_at = %v; want within [%v, %v + 1s]", r.availableAt, before, after)
 	}
 
 	// 再試行の時刻になれば、もう一度取り出して送ります。
@@ -703,7 +738,7 @@ func TestConcurrentApplyPointsAfterRollbackAppliesFollower(t *testing.T) {
 		}}, e)
 		aErr <- err
 	}()
-	<-reached
+	waitReached(t, reached, aErr)
 
 	type applyResult struct {
 		applied bool
@@ -805,5 +840,119 @@ func TestNotCommittedRetryProcessesRequest(t *testing.T) {
 	}
 	if n := countRows(t, `SELECT count(*) FROM orders`); n != 1 {
 		t.Fatalf("orders = %d; want 1", n)
+	}
+}
+
+// リースが切れたまま試行回数の上限に達した行は、再送せずに dead_at を設定します。
+// 結果が不明のまま、上限を超えて試行が続くことはありません。
+func TestExpiredLeaseAtMaxAttemptsIsDeadLettered(t *testing.T) {
+	reset(t)
+	ctx := context.Background()
+	insertEvent(t, "evt-1")
+	if _, err := testDB.Exec(`
+        UPDATE outbox SET attempts = $1, lease_token = 'stale', lease_until = now() - interval '1 second'
+        WHERE event_id = 'evt-1'`, maxAttempts); err != nil {
+		t.Fatal(err)
+	}
+	broker := &recordingBroker{}
+	ok, err := DispatchOne(ctx, testDB, broker)
+	if err != nil || ok {
+		t.Fatalf("DispatchOne = (%v, %v); want (false, nil)", ok, err)
+	}
+	if got := broker.received(); len(got) != 0 {
+		t.Fatalf("published = %v; want none（上限に達した行は再送しない）", got)
+	}
+	r := readOutbox(t, "evt-1")
+	if !r.dead.Valid || r.leaseToken.Valid || r.attempts != maxAttempts || !r.lastError.Valid {
+		t.Fatalf("row = %+v; want dead with the lease cleared and attempts unchanged", r)
+	}
+}
+
+// 上限回数目の試行で呼び出し元の Context が終わり、結果を記録できなかった場合です。
+// リースが切れた後に取り出す前に dead_at を設定し、11回目の試行を始めません。
+func TestCanceledAtMaxAttemptsIsDeadLetteredAfterLeaseExpiry(t *testing.T) {
+	reset(t)
+	insertEvent(t, "evt-1")
+	if _, err := testDB.Exec(`UPDATE outbox SET attempts = $1 WHERE event_id = 'evt-1'`, maxAttempts-1); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	waitCancel := brokerFunc(func(c context.Context, _ Message) error {
+		cancel()
+		<-c.Done()
+		return c.Err()
+	})
+	if ok, err := DispatchOne(ctx, testDB, waitCancel); !ok || !errors.Is(err, context.Canceled) {
+		t.Fatalf("DispatchOne = (%v, %v); want (true, context.Canceled)", ok, err)
+	}
+	if r := readOutbox(t, "evt-1"); r.attempts != maxAttempts || r.dead.Valid || !r.leaseToken.Valid {
+		t.Fatalf("row = %+v; want attempt %d recorded, leased, not dead yet", r, maxAttempts)
+	}
+
+	expireLease(t, "evt-1")
+	broker := &recordingBroker{}
+	if ok, err := DispatchOne(context.Background(), testDB, broker); err != nil || ok {
+		t.Fatalf("after expiry = (%v, %v); want (false, nil)", ok, err)
+	}
+	if got := broker.received(); len(got) != 0 {
+		t.Fatalf("published = %v; want none", got)
+	}
+	if r := readOutbox(t, "evt-1"); !r.dead.Valid || r.attempts != maxAttempts {
+		t.Fatalf("row = %+v; want dead with attempts %d", r, maxAttempts)
+	}
+}
+
+// 上限回数の途中でリースが切れた行は、これまでどおり取り直して再送します。
+func TestExpiredLeaseBelowMaxAttemptsIsStillRetaken(t *testing.T) {
+	reset(t)
+	insertEvent(t, "evt-1")
+	if _, err := testDB.Exec(`
+        UPDATE outbox SET attempts = $1, lease_token = 'stale', lease_until = now() - interval '1 second'
+        WHERE event_id = 'evt-1'`, maxAttempts-2); err != nil {
+		t.Fatal(err)
+	}
+	broker := &recordingBroker{}
+	if ok, err := DispatchOne(context.Background(), testDB, broker); err != nil || !ok {
+		t.Fatalf("DispatchOne = (%v, %v); want (true, nil)", ok, err)
+	}
+	if r := readOutbox(t, "evt-1"); !r.published.Valid || r.dead.Valid || r.attempts != maxAttempts-1 {
+		t.Fatalf("row = %+v; want published with attempts %d", r, maxAttempts-1)
+	}
+}
+
+// 再投入で dead_at を外しても attempts は戻らないため、次の失敗でもう一度 dead_at が設定されます。
+// 再び試行の余地を与えるかどうかは、運用の判断です（attempts を 0 に戻す更新は別に行います）。
+func TestRequeuedEventKeepsAttemptsUnlessResetByOperator(t *testing.T) {
+	reset(t)
+	ctx := context.Background()
+	insertEvent(t, "evt-1")
+	if _, err := testDB.Exec(`UPDATE outbox SET attempts = $1, dead_at = now() WHERE event_id = 'evt-1'`, maxAttempts); err != nil {
+		t.Fatal(err)
+	}
+	requeue := func(resetAttempts bool) {
+		t.Helper()
+		if _, err := testDB.Exec(`
+            UPDATE outbox SET dead_at = NULL, available_at = now(),
+                              attempts = CASE WHEN $1 THEN 0 ELSE attempts END
+            WHERE event_id = 'evt-1'`, resetAttempts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failing := brokerFunc(func(context.Context, Message) error { return errPublish })
+
+	requeue(false)
+	if ok, err := DispatchOne(ctx, testDB, failing); err != nil || !ok {
+		t.Fatalf("DispatchOne = (%v, %v); want (true, nil)", ok, err)
+	}
+	if r := readOutbox(t, "evt-1"); !r.dead.Valid || r.attempts != maxAttempts+1 {
+		t.Fatalf("row = %+v; want dead again after one more failed attempt", r)
+	}
+
+	requeue(true)
+	if ok, err := DispatchOne(ctx, testDB, failing); err != nil || !ok {
+		t.Fatalf("DispatchOne = (%v, %v); want (true, nil)", ok, err)
+	}
+	if r := readOutbox(t, "evt-1"); r.dead.Valid || r.attempts != 1 {
+		t.Fatalf("row = %+v; want a fresh retry budget (attempts 1, not dead)", r)
 	}
 }

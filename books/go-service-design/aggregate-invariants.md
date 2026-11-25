@@ -4,9 +4,9 @@ title: "集約の不変条件〜非公開フィールドで守る〜"
 
 ## はじめに
 
-DDD における集約（Aggregate）の最も重要な役割は、**不変条件（invariant）を常に満たした状態を保証する**ことです。不変条件とは、「注文金額は0以上でなければならない」「在庫数はマイナスにならない」といった、ビジネス上常に成立しなければならないルールを指します。
+DDD における集約（Aggregate）の中心的な役割は、不変条件（invariant）を、その集約の公開された操作を通じて満たし続けるように境界を定めることです。不変条件とは、「注文金額は0以上でなければならない」「在庫数はマイナスにならない」といった、ビジネス上常に成立しなければならないルールを指します。
 
-Java や C# ではアクセス修飾子（`private`、`protected`）を使ってフィールドを隠蔽しますが、Go にはクラスやアクセス修飾子がありません。代わりに、Go は**先頭文字の大小**でエクスポートの可否を制御します。この言語特性を活かして集約の不変条件を守る方法を、具体的なコード例とともに解説します。
+Java や C# ではアクセス修飾子（`private`、`protected`）を使ってフィールドを隠蔽しますが、Go にはクラスやアクセス修飾子がありません。代わりに、Go は先頭文字の大小でエクスポートの可否を制御します。この言語特性を活かして集約の不変条件を守る方法を、具体的なコード例とともに解説します。
 
 ---
 
@@ -32,26 +32,26 @@ Eric Evans は _Domain-Driven Design_ の中で、集約について次のよう
 
 ## すべての構造体を非公開にする必要はない
 
-まず重要な前提を共有します。**Go の構造体すべてで非公開フィールドが必要なわけではありません**。Go の標準ライブラリ自体、構造体の性質に応じて公開・非公開を使い分けています。
+まず重要な前提を共有します。Go の構造体すべてで非公開フィールドが必要なわけではありません。Go の標準ライブラリ自体、構造体の性質に応じて公開・非公開を使い分けています。
 
 ### 公開フィールドの構造体：設定やデータの入れ物
 
 標準ライブラリには、フィールドがすべて公開されている構造体が数多くあります。
 
 ```go
-// net/http パッケージ — http.Response は非公開フィールドが1つもない
+// net/http パッケージ — http.Response の主要な状態は公開フィールドで表される
 type Response struct {
     Status     string
     StatusCode int
     Header     Header
     Body       io.ReadCloser
-    // ... 全14フィールドがすべて公開
+    // ...
 }
 ```
 
-`http.Response` は HTTP レスポンスのデータを格納する構造体です。フィールド間に「`StatusCode` が 200 なら `Body` は必ず非 nil」のような整合性ルールはなく、各フィールドを独立して読み書きできます。
+`http.Response` は HTTP レスポンスのデータを格納する構造体です。ただし、公開フィールドだからフィールド間の契約がない、という意味ではありません。たとえば `http.Client` と `Transport` が返す `Response.Body` は、本文が空でも non-nil であることが API 契約です。`Uncompressed` が true のときは `ContentLength` と `Content-Encoding` の扱いが変わり、`Trailer` を参照できる時期にも制約があります。呼び出し側が構造体リテラルを作れることと、ライブラリが返す値に契約があることは両立します。
 
-同様に、`tls.Config` は約 32 個の公開フィールドを持つ設定用構造体です。`exec.Cmd` も `Path`、`Args`、`Stdout` などすべて公開されています。これらに共通するのは、**フィールド間に守るべき不変条件がない**という点です。
+同様に、`tls.Config` や `exec.Cmd` は設定や実行条件を公開フィールドで受け取ります。これらにもフィールドの組み合わせに関する契約や、利用時に検証される条件があります。公開フィールドを選べるのは「不変条件がないから」ではなく、呼び出し側による組み立てや変更を API として許可し、検証の時点と責任を別に定めているからです。
 
 ### 非公開フィールドの構造体：内部状態を持つオブジェクト
 
@@ -68,13 +68,13 @@ file, err := os.Open("data.txt")  // コンストラクタ経由でのみ生成
 | `regexp.Regexp` | `regexp.Compile()` | 正規表現のコンパイル結果を内部に持つため、パターン文字列なしでは生成できません |
 | `bufio.Scanner` | `bufio.NewScanner()` | 内部バッファやトークン解析の状態が複雑で、外部から操作すると壊れます |
 
-これらに共通するのは、**内部状態に整合性の制約がある**点です。DDD の集約もこちら側に該当します。
+これらに共通するのは、内部状態に整合性の制約がある点です。DDD の集約もこちら側に該当します。
 
 ### 判断基準
 
 | 構造体の性質 | フィールドの公開 | 標準ライブラリの例 |
 | --- | --- | --- |
-| 設定・データの入れ物 | 公開で十分 | `http.Response`, `tls.Config`, `exec.Cmd` |
+| 呼び出し側による組み立て・変更を許可する設定やデータ | 公開を選択できる。ただし API 契約と検証時点を文書化する | `http.Response`, `tls.Config`, `exec.Cmd` |
 | 内部状態に整合性ルールがある | 非公開 + コンストラクタ | `os.File`, `regexp.Regexp`, `bufio.Scanner` |
 
 以降のセクションでは、不変条件を持つ集約を対象に、非公開フィールドによる設計パターンを解説します。
@@ -110,7 +110,7 @@ order.Items = nil                     // 明細を空にできてしまう
 order.TotalPrice = -100               // 負の金額を設定できてしまう
 ```
 
-フィールドが公開されている限り、不変条件を守る責任が**集約の外側**に漏れ出します。すべての呼び出し元が正しくバリデーションしてくれることを祈るしかありません。
+フィールドが公開されている限り、不変条件を守る責任が集約の外側に漏れ出します。すべての呼び出し元が正しくバリデーションしてくれることを祈るしかありません。
 
 ---
 
@@ -130,8 +130,9 @@ package model
 
 type OrderStatus int
 
+// iota + 1 で始めるため、ゼロ値（0）は「未設定」として検出できます。
 const (
-    OrderStatusDraft OrderStatus = iota
+    OrderStatusDraft OrderStatus = iota + 1
     OrderStatusConfirmed
     OrderStatusCancelled
 )
@@ -163,24 +164,34 @@ Go にはコンストラクタ構文がありません。代わりに `New` プ�
 // domain/model/order.go
 
 func NewOrderItem(productID, name string, price, quantity int) (OrderItem, error) {
-    if productID == "" {
-        return OrderItem{}, errors.New("商品IDは必須です")
-    }
-    if name == "" {
-        return OrderItem{}, errors.New("商品名は必須です")
-    }
-    if price <= 0 {
-        return OrderItem{}, errors.New("価格は1以上でなければなりません")
-    }
-    if quantity <= 0 {
-        return OrderItem{}, errors.New("数量は1以上でなければなりません")
-    }
-    return OrderItem{
+    item := OrderItem{
         productID: productID,
         name:      name,
         price:     price,
         quantity:  quantity,
-    }, nil
+    }
+    if err := item.validate(); err != nil {
+        return OrderItem{}, err
+    }
+    return item, nil
+}
+
+// validate は明細の不変条件を検査します。
+// パッケージ外でも OrderItem{} というゼロ値は作れるため、明細を受け取る側でも呼びます。
+func (i OrderItem) validate() error {
+    if i.productID == "" {
+        return errors.New("商品IDは必須です")
+    }
+    if i.name == "" {
+        return errors.New("商品名は必須です")
+    }
+    if i.price <= 0 {
+        return errors.New("価格は1以上でなければなりません")
+    }
+    if i.quantity <= 0 {
+        return errors.New("数量は1以上でなければなりません")
+    }
+    return nil
 }
 
 func (i OrderItem) Subtotal() int {
@@ -200,6 +211,9 @@ func NewOrder(id string, items []OrderItem) (Order, error) {
 
     total := 0
     for _, item := range copied {
+        if err := item.validate(); err != nil {
+            return Order{}, fmt.Errorf("注文明細が不正です: %w", err)
+        }
         total += item.Subtotal()
     }
 
@@ -214,9 +228,10 @@ func NewOrder(id string, items []OrderItem) (Order, error) {
 
 ポイントは以下の3つです。
 
-- **`New` 関数でのみインスタンスを生成できる**: 不変条件を満たさない状態でインスタンスが存在することを防ぎます
-- **スライスのコピー**: 呼び出し元が渡したスライスをそのまま保持すると、外部からの変更で不変条件が壊れます。コンストラクタでは所有権を取得するためにコピーします
-- **`totalPrice` の自動計算**: 合計金額を外部から渡さず、明細から計算することで整合性を保証します
+- 通常の生成経路を `New` 関数に集約する: パッケージ外から非公開フィールドを指定した構造体を組み立てられません。ただし `Order{}` というゼロ値は作れるため、後述するゼロ値の方針も必要です
+- スライスのコピー: 呼び出し元が渡したスライスをそのまま保持すると、外部からの変更で不変条件が壊れます。コンストラクタでは所有権を取得するためにコピーします
+- `totalPrice` の自動計算: 合計金額を外部から渡さず、明細から計算することで整合性を保ちやすくします
+- 明細の再検証: `NewOrderItem` を通らないゼロ値の明細（`OrderItem{}`）も渡せるため、`NewOrder` と `AddItem` でも明細を検査します
 
 ---
 
@@ -227,7 +242,10 @@ func NewOrder(id string, items []OrderItem) (Order, error) {
 ```go
 func (o *Order) AddItem(item OrderItem) error {
     if o.status != OrderStatusDraft {
-        return errors.New("確定済みの注文には明細を追加できません")
+        return errors.New("下書き状態の注文にのみ明細を追加できます")
+    }
+    if err := item.validate(); err != nil {
+        return fmt.Errorf("注文明細が不正です: %w", err)
     }
     o.items = append(o.items, item)
     o.totalPrice += item.Subtotal()
@@ -248,18 +266,23 @@ func (o *Order) Confirm() error {
 // Cancel は下書き・確定済みの注文をキャンセルします。
 // このサンプルでは確定済み注文もキャンセル可能にしていますが、
 // ビジネスルールによっては確定後のキャンセルを禁止する設計も考えられます。
+// 許可する状態を列挙するため、ゼロ値（未設定）の注文はキャンセルできません。
 func (o *Order) Cancel() error {
-    if o.status == OrderStatusCancelled {
+    switch o.status {
+    case OrderStatusDraft, OrderStatusConfirmed:
+        o.status = OrderStatusCancelled
+        return nil
+    case OrderStatusCancelled:
         return errors.New("すでにキャンセル済みです")
+    default:
+        return errors.New("無効な注文です（New関数で生成してください）")
     }
-    o.status = OrderStatusCancelled
-    return nil
 }
 ```
 
 このパターンにより、状態遷移のルールが集約の内部に閉じ込められます。外部のコードが遷移の可否を判断する必要はありません。
 
-なお、これらのメソッドはポインタレシーバを使っているため、複数の goroutine から同時に呼ぶと競合状態になります。DDD では集約はトランザクション整合性の境界でもあるため、通常は1つのリクエスト（goroutine）内で操作が完結します。並行アクセスが必要な場合は、集約レベルではなくリポジトリ層で楽観的ロックやデータベースのトランザクション制御で対応するのが一般的です。
+なお、これらのメソッドはポインタレシーバを使っているため、複数の goroutine から同時に呼ぶと競合状態になります。DDD では集約はトランザクション整合性の境界でもあるため、通常は1つのリクエスト（goroutine）内で操作が完結します。並行アクセスが必要な場合は、集約レベルではなくリポジトリ層で、楽観的ロックやデータベースのトランザクション制御による対応を検討します。
 
 ```mermaid
 flowchart LR
@@ -274,7 +297,7 @@ flowchart LR
 
 ## ゲッターより振る舞いメソッドを優先する
 
-非公開フィールドにすると、値を外部から参照するためにゲッターが必要になります。しかし、**すべてのフィールドにゲッターを用意するのは避けるべき**です。
+非公開フィールドにすると、値を外部から参照するためにゲッターが必要になります。しかし、すべてのフィールドにゲッターを用意するのは避けるべきです。
 
 Go の標準ライブラリがこの原則をよく示しています。`os.File` は内部に多くの状態を持っていますが、公開しているゲッターは `Name()` と `Fd()` の2つだけです。残りの操作はすべて `Read()`、`Write()`、`Close()` といった振る舞いメソッドで行います。
 
@@ -310,7 +333,7 @@ Go の慣例では、ゲッターに `Get` プレフィックスを付けませ�
 > — [Effective Go](https://go.dev/doc/effective_go#Getters)
 
 ```go
-// 外部から確実に必要なものだけ公開する
+// 外部から必要なものだけ公開する
 func (o *Order) ID() string         { return o.id }
 func (o *Order) TotalPrice() int    { return o.totalPrice }
 ```
@@ -332,7 +355,7 @@ Go でこのパターンを採用する際、Java や C# の経験者にとっ�
 
 ### パッケージレベルのアクセス制御
 
-Go の非公開フィールドは**パッケージスコープ**です。同じパッケージ内のコードからはアクセスできます。
+Go の非公開フィールドはパッケージスコープです。同じパッケージ内のコードからはアクセスできます。
 
 | 言語 | アクセス制御の粒度 | 非公開フィールドへのアクセス         |
 | ---- | ------------------ | ------------------------------------ |
@@ -342,8 +365,8 @@ Go の非公開フィールドは**パッケージスコープ**です。同じ�
 
 つまり、`domain/model` パッケージ内の他のファイルからは非公開フィールドにアクセスできます。これを踏まえた設計方針は以下のとおりです。
 
-- **1つの集約 = 1つのパッケージ**にする必要はありません。`model` パッケージに複数の集約を置いても構いません
-- ただし、パッケージが肥大化すると同一パッケージ内からの意図しないアクセスが増えるため、**大規模なドメインモデルではパッケージを分割**することを検討します
+- 1つの集約 = 1つのパッケージにする必要はありません。`model` パッケージに複数の集約を置いても構いません
+- ただし、パッケージが肥大化すると同一パッケージ内からの意図しないアクセスが増えるため、大規模なドメインモデルではパッケージを分割することを検討します
 
 ### ゼロ値の扱い
 
@@ -356,7 +379,7 @@ var order model.Order
 
 これに対する実用的な対策をいくつか紹介します。
 
-**方法1：ゼロ値を無効な状態として扱う**
+#### 方法1：ゼロ値を無効な状態として扱う
 
 メソッド内でゼロ値を検出して拒否するアプローチです。
 
@@ -369,11 +392,11 @@ func (o *Order) Confirm() error {
 }
 ```
 
-**方法2：ゼロ値を有効な初期状態にする**
+#### 方法2：ゼロ値を有効な初期状態にする
 
 Go の標準ライブラリでは `sync.Mutex` や `bytes.Buffer` がこの方式を採用しています。ただし、DDD の集約では「明細が必須」のような不変条件があるため、この方法が適用できるケースは限られます。
 
-ここでは**方法1で十分**だと考えています。Go のエコシステムでは「ドキュメントと New 関数で正しい使い方を示す」という慣例が広く受け入れられています。
+ここでは方法1で十分だと考えています。Go のエコシステムでは「ドキュメントと New 関数で正しい使い方を示す」という慣例があります。
 
 ---
 
@@ -389,21 +412,24 @@ Go の標準ライブラリでは `sync.Mutex` や `bytes.Buffer` がこの方�
 // ReconstructOrder はリポジトリからの復元専用です。
 // ビジネスロジックからは NewOrder を使用してください。
 func ReconstructOrder(id string, status OrderStatus, items []OrderItem, totalPrice int) Order {
+    // NewOrder と同じく、呼び出し元のスライスとは所有権を分けるためにコピーします。
+    copied := make([]OrderItem, len(items))
+    copy(copied, items)
     return Order{
         id:         id,
         status:     status,
-        items:      items,
+        items:      copied,
         totalPrice: totalPrice,
     }
 }
 ```
 
-この関数は公開されているため、誤用のリスクがあります。これを軽減する方法として以下が考えられます。
+この関数は公開されているため、誤用のリスクがあります。`ReconstructOrder` は検証しないため、永続化された値が不変条件を満たしているという前提を、リポジトリ実装のテストで確認する必要があります。これを軽減する方法として以下が考えられます。
 
 - 関数名とコメントで用途を明示します
 - コードレビューで `Reconstruct` の呼び出し元がリポジトリ実装に限定されていることを確認します
 
-`internal` パッケージでアクセスを制限する方法も考えられますが、`domain/model` と `infrastructure/postgres` が別パッケージである以上、構成が複雑になりがちです。Java であれば package-private、C# であれば `internal` 修飾子で対応するところですが、Go では**関数名とコードレビューで用途を制限する**のが現実的です。
+`internal` パッケージでアクセスを制限する方法も考えられますが、`domain/model` と `infrastructure/postgres` が別パッケージである以上、構成が複雑になりがちです。Java であれば package-private、C# であれば `internal` 修飾子で対応するところですが、Go では関数名とコードレビューで用途を制限するのが現実的です。
 
 ---
 
@@ -471,9 +497,9 @@ func (r *orderRepository) Save(ctx context.Context, order *model.Order) error {
 
 このアプローチの利点は、外部に公開されるデータが `Snapshot()` の1箇所に集約される点です。個別のゲッターが不要なので、前セクションで述べた「ゲッターを最小限にする」方針と整合します。API レスポンスの組み立てにも同じ `OrderSnapshot` を活用できます。
 
-ただし、`Snapshot()` は `Status` フィールドを含むため、`snapshot.Status` を使った条件分岐が書けてしまう点はゲッター公開と同じです。違いは**意図の明示性**にあります。`order.Status()` は汎用的に使えるゲッターですが、`order.Snapshot()` は「永続化やレスポンス変換のためにデータを取り出す」という用途が名前から明確です。handler 層のビジネスロジックで `Snapshot()` を呼んでいれば、コードレビューで違和感に気づきやすくなります。
+ただし、`Snapshot()` は `Status` フィールドを含むため、`snapshot.Status` を使った条件分岐が書けてしまう点はゲッター公開と同じです。違いは意図の明示性にあります。`order.Status()` は汎用的に使えるゲッターですが、`order.Snapshot()` は「永続化やレスポンス変換のためにデータを取り出す」という用途が名前から明確です。handler 層のビジネスロジックで `Snapshot()` を呼んでいれば、コードレビューで違和感に気づきやすくなります。
 
-また、`OrderSnapshot` の構造が DB スキーマや API レスポンスに引きずられると、ドメインモデルが外側のレイヤーに依存するリスクがあります。`Snapshot` はあくまで**ドメインモデルが自身の状態をフラットに表現したもの**と位置づけ、DB カラム名や JSON タグはリポジトリ実装側で変換するようにします。
+また、`OrderSnapshot` の構造が DB スキーマや API レスポンスに引きずられると、ドメインモデルが外側のレイヤーに依存するリスクがあります。`Snapshot` はあくまでドメインモデルが自身の状態をフラットに表現したものと位置づけ、DB カラム名や JSON タグはリポジトリ実装側で変換するようにします。
 
 ### 方法2：永続化用のゲッターを割り切って公開する
 
@@ -542,7 +568,7 @@ graph TD
     style B fill:#f9f,stroke:#333
 ```
 
-外部からの操作はすべて公開された関数・メソッドを経由するため、不変条件が破られることはありません。
+パッケージ外からの通常の操作を公開関数・メソッドへ集約することで、不変条件を一箇所で検査しやすくなります。ただし、ゼロ値、復元用関数、デシリアライズなどの迂回経路も設計とテストの対象です。
 
 ---
 
@@ -553,12 +579,12 @@ Go で集約の不変条件を守るための設計パターンを整理しま�
 | パターン         | 内容                           | 効果                               |
 | ---------------- | ------------------------------ | ---------------------------------- |
 | 非公開フィールド | 先頭小文字でフィールドを隠蔽   | 外部からの直接変更を防止           |
-| New 関数         | コンストラクタでバリデーション | 不正な状態のインスタンス生成を防止 |
+| New 関数         | コンストラクタでバリデーション | 通常の生成経路で不正な状態を拒否   |
 | 振る舞いメソッド | 状態判断と変更をメソッドに集約 | ドメインロジックの漏れ出しを防止   |
 | 最小限のゲッター | 外部が本当に必要な値だけ公開   | 内部状態への不要な依存を防止       |
 | Reconstruct 関数 | 永続化層からの復元用           | バリデーションのバイパスを用途限定 |
 
-Go にはクラスやアクセス修飾子はありませんが、**パッケージスコープの非公開フィールドと慣例的な New 関数の組み合わせ**で、実用上十分なカプセル化が実現できます。クラスレベルのアクセス制御には及びませんが、Go のシンプルな仕組みだからこそ、「不変条件を守る」という本質に集中できると私は感じています。
+Go にはクラスやアクセス修飾子はありませんが、パッケージスコープの非公開フィールドと慣例的な New 関数の組み合わせで、実用上は十分なカプセル化を実現できると考えています。クラスレベルのアクセス制御には及びませんが、Go のシンプルな仕組みだからこそ、「不変条件を守る」という本質に集中できると私は感じています。
 
 ---
 
@@ -568,7 +594,8 @@ Go にはクラスやアクセス修飾子はありませんが、**パッケー
 | --- | --- |
 | 集約とエンティティの定義 | Eric Evans, _Domain-Driven Design_（2003） |
 | 集約の設計ルール | Vaughn Vernon, _Implementing Domain-Driven Design_（2013） |
+| `http.Response` のフィールド契約 | Go 公式ドキュメント, [`net/http.Response`](https://pkg.go.dev/net/http#Response) |
 | Go のエクスポートルール | [The Go Programming Language Specification](https://go.dev/ref/spec#Exported_identifiers) |
 | Go のゲッター慣例 | [Effective Go](https://go.dev/doc/effective_go#Getters) |
 | Go のパッケージ設計 | [Go Blog: Organizing Go code](https://go.dev/blog/organizing-go-code) |
-| ゼロ値の活用 | [Go Blog: The zero value](https://go.dev/ref/spec#The_zero_value) |
+| ゼロ値の活用 | [Go 言語仕様: The zero value](https://go.dev/ref/spec#The_zero_value) |

@@ -6,7 +6,7 @@ title: "DI とコンポジションルート〜依存の配線をどこに書く
 
 ここまでの章で「interface は利用側で定義する」「実装は infrastructure 層に置く」「依存の注入は main 関数で行う」と繰り返し書いてきました。この章では最後の「main 関数で注入する」の部分を掘り下げます。依存の配線をどこに書くか、手動で書くかツールに任せるか、という論点です。
 
-先に私の結論を書いておきます。**手動 DI から始めてください**。Go の DI はコンストラクタ関数に引数を渡すだけの話で、ツールが必要になるのは配線が数百行を超えてからです。
+先に本書の方針を書いておきます。手動 DI から始めます。Go ではコンストラクタ関数へ依存を渡すだけでも配線できるため、まず追加ツールなしで構造を可視化します。配線変更が実際に開発の待ち時間になったとき、保守状況を含めてツールを評価します。
 
 ---
 
@@ -40,13 +40,24 @@ graph TD
 手動 DI の実体は、コンストラクタ関数の呼び出しを依存の順に並べることです。
 
 ```go
-// cmd/server/main.go
-func main() {
-    db, err := sql.Open("pgx", os.Getenv("DATABASE_URL"))
+// cmd/server/main.go。コンストラクタなどの詳細は省略しています。
+func run() error {
+    dsn := os.Getenv("DATABASE_URL")
+    if dsn == "" {
+        return errors.New("DATABASE_URL is required")
+    }
+    db, err := sql.Open("pgx", dsn)
     if err != nil {
-        log.Fatal(err)
+        return err
     }
     defer db.Close()
+
+    // sql.Open は接続を確立するとは限らないため、起動時に明示的に確認する。
+    pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer cancel()
+    if err := db.PingContext(pingCtx); err != nil {
+        return fmt.Errorf("connect database: %w", err)
+    }
 
     // infrastructure層：外側から組み立てる
     orderRepo := postgres.NewOrderRepository(db)
@@ -63,19 +74,28 @@ func main() {
     mux.HandleFunc("POST /orders", orderHandler.Create)
     mux.HandleFunc("GET /orders/{id}", orderHandler.Get)
 
-    log.Fatal(http.ListenAndServe(":8080", mux))
+    return http.ListenAndServe(":8080", mux)
+}
+
+func main() {
+    if err := run(); err != nil {
+        log.Print(err)
+        os.Exit(1)
+    }
 }
 ```
 
+`run` が戻ってから終了コードを設定するため、`defer db.Close()` が実行されます。実際のサービスでは、後述するように受付停止と進行中の処理の完了も待ちます。
+
 利点は3つあります。
 
-- **コンパイル時にすべて検証される**。引数の型が合わなければビルドが通りません
-- **実行順が読める**。何がどの順で初期化されるか、上から読むだけで分かります
-- **学習コストがゼロ**。新しくチームに入った人が追加のツールを学ぶ必要がありません
+- 依存の型整合性をコンパイル時に検証できる。引数の型が合わなければビルドが通りません。ただし、環境変数、nil、認証情報、接続可否、設定値の意味までは別の起動時検証やテストが必要です
+- 実行順が読める。何がどの順で初期化されるか、上から読むだけで分かります
+- DI コンテナ固有の学習を増やさない。Go のコンストラクタ呼び出しだけで配線を追えます
 
 ### interface 満足の検証もここに置く
 
-第2章で紹介した`var _`イディオムの置き場所も、コンポジションルートです。
+第12章「Go の interface 設計」で紹介した`var _`イディオムの置き場所の一例が、コンポジションルートです。
 
 ```go
 // cmd/server/main.go
@@ -113,9 +133,80 @@ userHandler := userdi.NewUserHandler(db)
 
 ---
 
-## wire：コード生成による自動配線
+## logger、tracer、Worker の配線と停止
 
-[google/wire](https://github.com/google/wire)は、コンストラクタ関数の集合から配線コードを生成するツールです。
+DB と同様に、`slog.Logger` と OpenTelemetry の tracer provider は外側で設定します。各コンストラクタに必要な logger や tracer を渡し、Domain Entity には渡しません。たとえば、次のように配線します。
+
+```go
+logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+// 設定済みの tracer provider は exporter とともに起動時に生成します。
+tracer := tracerProvider.Tracer("book-service")
+repo := postgres.NewBookRepository(db)
+lookup := usecase.NewLookupBook(repo, tracer)
+handler := httpadapter.NewBookHandler(lookup, logger)
+worker := jobs.NewWorker(repo, logger, tracer)
+```
+
+この断片では provider の設定とコンストラクタの実装を省略しています。Worker の開始・停止と待ち合わせもコンポジションルートの責任です。リクエストに紐づく goroutine と Worker の寿命の違いは第18章、計装の粒度は第20章で扱います。
+
+終了シグナルを受けたら、新しい受付を止め、進行中の HTTP 処理を drain します。HTTP 処理が Worker に依存する場合は、その後に Worker をキャンセルして完了を待ちます。最後に DB を閉じ、テレメトリーを flush して provider を停止します。次の例は、アプリケーションが追跡するすべてのハンドラの完了を `handlersDone`、Worker の完了を `workerDone` のクローズで知らせる構成です。
+
+```go
+func stop(
+    server *http.Server,
+    handlersDone <-chan struct{},
+    cancelWorker context.CancelFunc,
+    workerDone <-chan struct{},
+    db *sql.DB,
+    shutdownTelemetry func(context.Context) error,
+) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+
+    var errs []error
+    if err := server.Shutdown(ctx); err != nil {
+        errs = append(errs, err)
+        if err := server.Close(); err != nil {
+            errs = append(errs, err)
+        }
+    }
+    select {
+    case <-handlersDone:
+    case <-ctx.Done():
+        cancelWorker()
+        return errors.Join(append(errs, ctx.Err())...)
+    }
+    cancelWorker()
+    select {
+    case <-workerDone:
+    case <-ctx.Done():
+        // 使用中の資源を閉じず、呼び出し側で強制終了を判断します。
+        return errors.Join(append(errs, ctx.Err())...)
+    }
+    if err := db.Close(); err != nil {
+        errs = append(errs, err)
+    }
+    if err := shutdownTelemetry(ctx); err != nil {
+        errs = append(errs, err)
+    }
+    return errors.Join(errs...)
+}
+```
+
+シグナルの Context はすでにキャンセルされているため、終了処理には独立した期限を使います。ハンドラの追跡は別途実装し、受付停止後に新しいハンドラが追加されないことを保証します。ハイジャックした接続も別途管理します。
+
+この例の `shutdownTelemetry` は provider の shutdown を呼ぶ関数です。複数 provider があれば、それぞれ停止します。
+
+注意点は次のとおりです。
+
+- 1つの期限を HTTP の drain、Worker の停止、telemetry の flush で共有すると、前段が長引いたときに後段の時間が残りません。運用に応じて段階ごとの時間を確保し、停止に失敗した段階を報告します。
+- `db.Close` は Context による期限を受け取りません。残りの終了猶予を考慮し、ハンドラや Worker が停止していない段階では資源を使用中のまま閉じず、終了猶予と強制終了の方針に従います。
+
+---
+
+## Wire：既存利用時のコード生成による自動配線
+
+[google/wire](https://github.com/google/wire)は、コンストラクタ関数の集合から配線コードを生成するツールです。ただし、リポジトリはアーカイブ済みで、現在は保守されていません（GitHub のリポジトリ情報を2026年11月21日に確認）。以下は既存コードを読むための例です。新規採用では、次の選択肢を比較してください。手動 DI を続ける、保守中の代替を評価する、社内 fork の保守責任を引き受ける、の3つです。
 
 ```go
 // internal/order/di/wire.go
@@ -162,24 +253,25 @@ err := c.Invoke(func(h *handler.OrderHandler) {
 
 ## 3つのアプローチの比較
 
-| 観点           | 手動 DI                  | wire                     | dig / fx               |
-| -------------- | ------------------------ | ------------------------ | ---------------------- |
-| 検証タイミング | コンパイル時             | コンパイル時（生成時）   | 実行時                 |
-| 追加ツール     | 不要                     | wire コマンド            | ライブラリ             |
-| 配線の可読性   | 高い（ただの Go コード） | 生成コードを読めば分かる | コンテナ内部は追えない |
-| 配線追加の手間 | 引数の手直しが必要       | プロバイダ登録のみ       | プロバイダ登録のみ     |
-| 向く規模       | 小〜中                   | 中〜大                   | fx 前提の大規模組織    |
+| 観点           | 手動 DI                  | Wire（アーカイブ済み）     | dig / fx               |
+| -------------- | ------------------------ | -------------------------- | ---------------------- |
+| 検証タイミング | コンパイル時             | コンパイル時（生成時）     | 実行時                 |
+| 追加ツール     | 不要                     | Wire コマンド              | ライブラリ             |
+| 配線の可読性   | 高い（ただの Go コード） | 生成コードを読めば分かる   | コンテナ内部は追えない |
+| 配線追加の手間 | 引数の手直しが必要       | プロバイダ登録のみ         | プロバイダ登録のみ     |
+| 保守状況       | 自分たちのコード         | アーカイブ済み（保守なし） | 各プロジェクトで確認   |
 
-移行の順序も書いておきます。手動 DI で始めて、モジュール組み立て関数で整理して、それでも配線の修正が開発の待ち時間になってきたら wire を検討する。この順です。逆方向の移行（wire をやめて手動に戻す）は生成コードをコミットすれば済むので、wire の採用はやり直しがききます。
+本書では手動 DI で始め、モジュール組み立て関数で整理します。それでも配線の修正が開発の待ち時間になる場合は、保守中のコード生成ツールやフレームワークを、移行コストと運用責任を含めて評価します。既存の Wire 利用を続ける場合はバージョンを固定し、生成コードを保持し、Go の更新時に自分たちで互換性を検証します。
 
 ---
 
 ## まとめ
 
 - 依存の配線はコンポジションルート（`main`か初期化専用パッケージ）に集約します。配線と interface 満足の検証をここに置けば、実装の差し替え地点が1箇所になります
-- 手動 DI から始めます。コンパイル時検証、可読性、学習コストのバランスが最もよいからです
-- 肥大化にはまずモジュールごとの組み立て関数で対処し、それでも足りなければ wire を導入します
+- 本書では手動 DI から始めます。依存の型整合性をコンパイル時に確認でき、追加ツールなしで配線を追えるからです。設定値と外部接続は別途、起動時に検証します
+- 肥大化にはまずモジュールごとの組み立て関数で対処します。Wire は保守終了済みのため、新規採用の既定値にはしません
 - 実行時解決の DI コンテナは、コンパイル時検証を手放すコストに見合う理由があるときだけ選びます
+- logger、tracer、Worker の寿命も外側で管理し、利用者の停止を待ってから共有資源を閉じます
 
 ---
 
@@ -188,6 +280,7 @@ err := c.Invoke(func(h *handler.OrderHandler) {
 | 内容 | 出典 |
 | --- | --- |
 | Composition Root | Mark Seemann, [Composition Root](https://blog.ploeh.dk/2011/07/28/CompositionRoot/)（2011） |
+| DB ハンドルと接続確認 | Go 公式ドキュメント, [Opening a database handle](https://go.dev/doc/database/open-handle) |
 | wire | [google/wire - GitHub](https://github.com/google/wire) |
 | wire 紹介記事 | The Go Blog, [Compile-time Dependency Injection With Go Cloud's Wire](https://go.dev/blog/wire) |
 | dig | [uber-go/dig - GitHub](https://github.com/uber-go/dig) |

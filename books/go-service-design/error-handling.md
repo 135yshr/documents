@@ -6,7 +6,7 @@ title: "エラーハンドリング設計〜ドメインエラーとインフラ
 
 :::message
 
-本章は、Go で DDD × クリーンアーキテクチャを採用したプロジェクトを運用する中で、エラーハンドリングに悩み調べてきた内容をまとめたものです。各セクションの根拠となる一次情報源は、該当箇所に参照リンクを記載しています。
+本章は、Go で DDD × クリーンアーキテクチャを採用したプロジェクトを運用する中で、エラーハンドリングに悩み調べてきた内容をまとめたものです。運用経験に基づく判断と、一次情報源で裏付けられる一般論を区別して書いています。一般論には参照リンクを付けています。
 
 :::
 
@@ -16,7 +16,7 @@ DDD で設計された Go のプロジェクトで、最初に混乱したのが
 - Handler 層で`err != nil`の中身を見て、400なのか500なのかを判断する if 文が増殖します
 - エラーメッセージをそのままクライアントに返してしまい、内部構造が漏洩します
 
-この章では、教科書通りのエラーハンドリングから始めて、**運用で見つかった課題と改善の過程**を共有します。
+この章では、教科書通りのエラーハンドリングから始めて、運用で見つかった課題と改善の過程を共有します。
 
 ---
 
@@ -30,7 +30,7 @@ DDD で設計された Go のプロジェクトで、最初に混乱したのが
 | アプリケーションエラー | UseCase 層 | 「指定されたリソースが見つかりません」「権限がありません」 | 404 / 403 |
 | インフラエラー | Infrastructure 層 | 「DB に接続できません」「外部 API がタイムアウトしました」 | 500 / 502 / 503 |
 
-分類自体は正しいのですが、問題は**実装方法**でした。
+分類自体は正しいのですが、問題は実装方法でした。
 
 ---
 
@@ -53,11 +53,11 @@ var (
 
 ```go
 // domain/model/import_job.go
-func (j *ImportJob) Start(totalCount int) error {
+// 現在時刻は引数で受け取り、テストで固定できるようにします（第15章と同じ方針）。
+func (j *ImportJob) Start(totalCount int, now time.Time) error {
     if j.Status != StatusPending {
         return ErrTaskAlreadyRunning
     }
-    now := time.Now()
     j.Status = StatusProcessing
     j.TotalCount = totalCount
     j.StartedAt = &now
@@ -69,7 +69,7 @@ func (j *ImportJob) Start(totalCount int) error {
 
 ```go
 // usecase/start_job_interactor.go
-if err := job.Start(totalCount); err != nil {
+if err := job.Start(totalCount, i.now()); err != nil {
     if errors.Is(err, model.ErrTaskAlreadyRunning) {
         // 冪等に扱う（成功として返す）
         return nil
@@ -110,39 +110,31 @@ func (h *JobHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-sentinel error が増えるたびに Handler 層の if 文が増殖します。**エラーの種類と HTTP ステータスの対応が散在**してしまいました。
+sentinel error が増えるたびに Handler 層の if 文が増殖します。エラーの種類と HTTP ステータスの対応が散在してしまいました。
 
 ---
 
 ## 改善：CodedError パターンの導入
 
-sentinel error を維持しつつ、**エラーコードと HTTP ステータスを組み込んだ CodedError 型**を導入しました。
+sentinel error を維持しつつ、エラーコードを持つ CodedError 型を導入しました。UseCase 層は HTTP ステータスを知らず、コードだけを返します。コードから HTTP ステータスへの対応は、Handler 層の1箇所で決めます。
 
 ```go
 // pkg/apperror/coded_error.go
 package apperror
 
-import "net/http"
-
 type CodedError struct {
-    code       string
-    message    string
-    httpStatus int
+    code    string
+    message string
 }
 
 func (e *CodedError) Error() string {
     return e.message
 }
 
-func (e *CodedError) Code() string       { return e.code }
-func (e *CodedError) HTTPStatus() int    { return e.httpStatus }
+func (e *CodedError) Code() string { return e.code }
 
-func newCodedError(code, message string, status int) *CodedError {
-    return &CodedError{
-        code:       code,
-        message:    message,
-        httpStatus: status,
-    }
+func newCodedError(code, message string) *CodedError {
+    return &CodedError{code: code, message: message}
 }
 ```
 
@@ -151,35 +143,59 @@ func newCodedError(code, message string, status int) *CodedError {
 ```go
 // pkg/apperror/codes.go
 var (
-    // バリデーション系（400）
-    ErrInvalidFormat = newCodedError("VAL001", "invalid format", http.StatusBadRequest)
-    ErrDuplicateEntry = newCodedError("VAL002", "duplicate entry", http.StatusBadRequest)
+    // バリデーション系
+    ErrInvalidFormat  = newCodedError("VAL001", "invalid format")
+    ErrDuplicateEntry = newCodedError("VAL002", "duplicate entry")
 
-    // 競合系（409）
-    ErrAlreadyRunning = newCodedError("CONF001", "resource is already running", http.StatusConflict)
+    // 競合系
+    ErrAlreadyRunning = newCodedError("CONF001", "resource is already running")
 
     // 認証・認可系
-    ErrAuthRequired = newCodedError("AUTH001", "authentication required", http.StatusUnauthorized)
-    ErrForbidden    = newCodedError("AUTH002", "permission denied", http.StatusForbidden)
+    ErrAuthRequired = newCodedError("AUTH001", "authentication required")
+    ErrForbidden    = newCodedError("AUTH002", "permission denied")
 
-    // リソース系（404）
-    ErrNotFound = newCodedError("RES001", "resource not found", http.StatusNotFound)
+    // リソース系
+    ErrNotFound = newCodedError("RES001", "resource not found")
 
-    // 内部エラー系（500）
-    ErrInternal = newCodedError("SYS001", "internal error", http.StatusInternalServerError)
+    // 内部エラー系
+    ErrInternal = newCodedError("SYS001", "internal error")
 )
 ```
 
+コードと HTTP ステータスの対応は、インターフェース層（Handler）に置きます。
+
+```go
+// interface/rest/handler/error_status.go
+var statusByCode = map[string]int{
+    "VAL001":  http.StatusBadRequest,
+    "VAL002":  http.StatusBadRequest,
+    "CONF001": http.StatusConflict,
+    "AUTH001": http.StatusUnauthorized,
+    "AUTH002": http.StatusForbidden,
+    "RES001":  http.StatusNotFound,
+    "SYS001":  http.StatusInternalServerError,
+}
+
+func httpStatusOf(code string) int {
+    if status, ok := statusByCode[code]; ok {
+        return status
+    }
+    return http.StatusInternalServerError
+}
+```
+
+なぜ HTTP ステータスを CodedError に持たせないのかというと、UseCase 層が HTTP の語彙に依存しなくて済むためです。同じ UseCase を gRPC や CLI から呼ぶ場合、ステータスの対応は入口ごとに変わります。
+
 ### Handler 層がシンプルになる
 
-CodedError を導入したことで、Handler 層のエラー処理を**1箇所に集約**できました。
+CodedError を導入したことで、Handler 層のエラー処理を1箇所に集約できました。
 
 ```go
 // interface/rest/handler/error_handler.go
 func HandleError(w http.ResponseWriter, err error) {
     var coded *apperror.CodedError
     if errors.As(err, &coded) {
-        writeJSON(w, coded.HTTPStatus(), ErrorResponse{
+        writeJSON(w, httpStatusOf(coded.Code()), ErrorResponse{
             Code:    coded.Code(),
             Message: coded.Error(),
         })
@@ -189,7 +205,7 @@ func HandleError(w http.ResponseWriter, err error) {
     // CodedErrorでないエラーはすべて内部エラー
     slog.Error("unhandled error", "error", err)
     internal := apperror.ErrInternal
-    writeJSON(w, internal.HTTPStatus(), ErrorResponse{
+    writeJSON(w, httpStatusOf(internal.Code()), ErrorResponse{
         Code:    internal.Code(),
         Message: internal.Error(),
     })
@@ -208,7 +224,7 @@ func (h *JobHandler) CreateJob(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-これにより、if 文の分岐がなくなりました。`HandleError`は`errors.As`で**型**（`*CodedError`）を判定しているため、どの`CodedError`でも同じ処理で扱えます。
+これにより、if 文の分岐がなくなりました。`HandleError`は`errors.As`で型（`*CodedError`）を判定しているため、どの`CodedError`でも同じ処理で扱えます。
 
 なお、`apperror.ErrNotFound`などはパッケージレベルのポインタ変数なので、`errors.Is(err, apperror.ErrNotFound)`による値の比較も機能します。特定のエラー種別を Handler 層で区別したい場合は`errors.Is`、全`CodedError`を一括処理する場合は`errors.As`が適しています。
 
@@ -260,7 +276,7 @@ func (i *CreateJobInteractor) Execute(ctx context.Context, req *CreateJobInput) 
 
 ### なぜドメイン層は sentinel error のままなのか
 
-ドメイン層は**HTTP ステータスやエラーコードを知るべきではない**からです。ドメインの関心事は「ビジネスルール違反が起きたこと」であり、HTTP 400や409への変換はプレゼンテーションの責務です。
+ドメイン層はHTTP ステータスとエラーコードのどちらも知るべきではないからです。ドメインの関心事は「ビジネスルール違反が起きたこと」であり、HTTP 400や409への変換はプレゼンテーションの責務です。UseCase 層は CodedError のコードまでを決め、そのコードを HTTP ステータスに変えるのは Handler 層です。
 
 ```go
 // usecase/get_job_interactor.go
@@ -282,7 +298,7 @@ func (i *GetJobInteractor) Execute(ctx context.Context, id string) (*GetJobOutpu
 
 ### 教科書の主張と実務のギャップ
 
-クリーンアーキテクチャの解説では「インフラ層はインフラエラーをそのまま返し、UseCase 層で解釈すべき」と述べられることがあります。しかし実際に運用してみると、**インフラ層で DB エラーをドメインエラーに変換する**方が扱いやすい場面は多くありました。
+クリーンアーキテクチャの解説では「インフラ層はインフラエラーをそのまま返し、UseCase 層で解釈すべき」と述べられることがあります。しかし実際に運用してみると、インフラ層で DB エラーをドメインエラーに変換する方が扱いやすい場面は多くありました。
 
 ```go
 // infrastructure/postgres/job_repository.go
@@ -299,20 +315,20 @@ func (r *jobRepository) FindByID(ctx context.Context, id string) (*model.ImportJ
 }
 ```
 
-`gorm.ErrRecordNotFound`を`model.ErrTaskNotFound`に変換しています。ヘキサゴナルアーキテクチャでは、アダプター（Repository 実装）が技術的なエラーをドメインが理解できる形に変換する責務を持つとされており、この変換は**境界での翻訳**として合理的だと考えています。
+`gorm.ErrRecordNotFound`を`model.ErrTaskNotFound`に変換しています。ヘキサゴナルアーキテクチャでは、アダプター（Repository 実装）が技術的なエラーをドメインが理解できる形に変換する責務を持つとされており、この変換は境界での翻訳として合理的だと考えています。
 
 ただし、この変換ロジックのユニットテストには DB のモックや testcontainers が必要になる点は留意してください。
 
 ### なぜ境界での変換が合理的か
 
-1. **Interactor が`gorm`パッケージを知らずに済む** — Interactor で`gorm.ErrRecordNotFound`を判定すると、インフラ詳細への依存が生まれます。
-2. **Repository はドメインとインフラの境界である** — Repository interface は domain 層に定義されています。その実装は「ドメインの言葉に翻訳して返す」責務を持っています。
+1. Interactor が`gorm`パッケージを知らずに済む。Interactor で`gorm.ErrRecordNotFound`を判定すると、インフラ詳細への依存が生まれます。
+2. Repository はドメインとインフラの境界です。Repository interface は domain 層に定義されています。その実装は「ドメインの言葉に翻訳して返す」責務を持っています。
 
 なお、この設計ではインフラ層がドメインの sentinel error（`model.ErrTaskNotFound`）に依存します。ドメインのエラーシンボルを変更するとインフラ層にも波及します。ただし、Infrastructure→Domain の方向はクリーンアーキテクチャの依存方向として正しいため、許容範囲と判断しました。
 
 ### 変換すべきでないケース
 
-一方、**Repository 層が CodedError を直接返す**パターンは避けるべきです。
+一方、Repository 層が CodedError を直接返すパターンは避けるべきです。
 
 ```go
 // ❌ Repository層がHTTPステータスを含むCodedErrorを返している
@@ -340,7 +356,7 @@ func (r *userRepository) Save(ctx context.Context, u *model.User) error {
 | DB 固有エラー | ラップして伝播 | Repository 層 | 接続エラー → `fmt.Errorf("failed: %w", err)` |
 | ドメイン sentinel error | CodedError | UseCase 層 | `model.ErrDuplicateEmail` → `apperror.ErrDuplicateEntry` |
 
-ルールは1つです。**Repository 層はドメインの sentinel error までしか返さず、CodedError への変換は UseCase 層が担います**。`FindByID`の例と同じパターンを、一意制約違反にも適用します。
+ルールは1つです。Repository 層はドメインの sentinel error までしか返さず、CodedError への変換は UseCase 層が担います。`FindByID`の例と同じパターンを、一意制約違反にも適用します。
 
 ### 一意制約違反の変換例
 
@@ -418,20 +434,20 @@ flowchart LR
 
 ## セキュリティの観点
 
-エラーハンドリングは**セキュリティの多層防御**の一部でもあります。
+エラーハンドリングはセキュリティの多層防御の一部でもあります。
 
 ### インフラエラーの詳細をクライアントに返さない
 
 ```go
 // ❌ SQLエラーがそのまま露出
 writeJSON(w, 500, map[string]string{
-    "error": err.Error(), // "Error 1045: Access denied for user 'root'@'localhost'"
+    "error": err.Error(), // "pq: password authentication failed for user \"app\""
 })
 
 // ✅ CodedErrorでないエラーは汎用メッセージに変換
 slog.Error("unhandled error", "error", err)
 internal := apperror.ErrInternal
-writeJSON(w, internal.HTTPStatus(), ErrorResponse{
+writeJSON(w, httpStatusOf(internal.Code()), ErrorResponse{
     Code:    internal.Code(),
     Message: internal.Error(),
 })
@@ -449,26 +465,31 @@ writeJSON(w, internal.HTTPStatus(), ErrorResponse{
 
 ### HTTP ステータスコードでリソースの存在を推測させない
 
-`404 Not Found`と`403 Forbidden`を使い分けると、リソースの存在が推測できてしまいます。認可エラーでもリソースの存在を隠したい場合は、一律`404`を返す設計を検討してください。
+`404 Not Found`と`403 Forbidden`を使い分けると、リソースの存在が推測できてしまいます。認可エラーでもリソースの存在を隠したい場合は、「存在しない」場合とまったく同じ応答を返す設計を検討してください。
+
+ステータスだけを`404`に変えても不十分です。本文のコードやメッセージが`AUTH002`と`RES001`で異なれば、クライアントは両者を区別できます。存在を隠す操作では、ステータス、コード、メッセージのすべてをそろえます。
 
 ```go
-// HandleError 内で認可エラーを404に変換する例
-func HandleError(w http.ResponseWriter, err error) {
-    var coded *apperror.CodedError
-    if errors.As(err, &coded) {
-        status := coded.HTTPStatus()
-        if status == http.StatusForbidden {
-            status = http.StatusNotFound  // 存在を推測させない
-        }
-        writeJSON(w, status, ErrorResponse{
-            Code:    coded.Code(),
-            Message: coded.Error(),
-        })
+// 存在を隠したいリソースの入口で使う変換です。
+// 認可エラーを「見つからない」に置き換え、ステータス・コード・メッセージをそろえます。
+func concealExistence(err error) error {
+    if errors.Is(err, apperror.ErrForbidden) {
+        return apperror.ErrNotFound
+    }
+    return err
+}
+
+func (h *JobHandler) GetJob(w http.ResponseWriter, r *http.Request) {
+    result, err := h.getJob.Execute(r.Context(), r.PathValue("id"))
+    if err != nil {
+        HandleError(w, concealExistence(err))
         return
     }
-    // ...
+    writeJSON(w, http.StatusOK, result)
 }
 ```
+
+置き換える前のエラーは、調査のためにサーバー側のログへ記録します。応答をそろえても、処理時間の差から存在を推測できる場合があります。その差が問題になる操作では、別に対策が必要です。
 
 ### スタックトレースをクライアントに返さない
 
@@ -482,12 +503,12 @@ func HandleError(w http.ResponseWriter, err error) {
 | --- | --- | --- |
 | Domain | ビジネスルール違反を表現する | sentinel error（`errors.New`） |
 | Infrastructure | DB エラーをドメインの言葉に翻訳する | 「見つからない」→ sentinel error、それ以外 → `%w`でラップ |
-| UseCase | ドメインエラーを CodedError に変換する | `apperror.ErrXxx`を返す |
-| Handler | CodedError を HTTP レスポンスに変換する | `errors.As`で型判定、1箇所で集約処理 |
+| UseCase | ドメインエラーを CodedError に変換する | `apperror.ErrXxx`を返す（HTTP は知らない） |
+| Handler | CodedError のコードを HTTP ステータスに変換する | `errors.As`で型判定、対応表で1箇所に集約 |
 
 最初は sentinel error だけで始め、Handler 層の if 文が爆発した時点で CodedError を導入しました。段階的に改善できるのがこのパターンの利点です。
 
-重要なのは**エラーの変換場所を明確にする**ことです。「見つからない」のような事実の翻訳は Repository 層で、「重複エントリ」のようなビジネス判断は UseCase 層で行います。
+重要なのはエラーの変換場所を明確にすることです。「見つからない」のような事実の翻訳は Repository 層で、「重複エントリ」のようなビジネス判断は UseCase 層で行います。
 
 ---
 

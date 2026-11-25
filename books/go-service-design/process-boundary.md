@@ -1,0 +1,531 @@
+---
+title: "トランザクション境界を越える〜Outbox・再送・冪等性〜"
+---
+
+## はじめに
+
+第9章ではインプロセスのドメインイベント、第14章では単一 DB のローカルトランザクションを扱いました。この章では、注文の確定を別サービスへ通知する例で、プロセス境界を越えるときの障害を扱います。DB とブローカーを1つのローカルトランザクションにはできません。
+
+話の流れは次のとおりです。ドメインイベントを別プロセスへ届けようとすると、DB への保存と送信の二重書き（Dual Write）の問題が生じます。Transactional Outbox はこの問題を、保存と「送信予定の記録」を1つのトランザクションにまとめることで避けます。ただし、その結果として得られるのは at-least-once の配送であり、同じイベントが重複して届くことがあります。そのため、受信側と HTTP の入口で冪等性を設計します。本章は exactly-once の配送を前提にしません。
+
+## Dual Write と Transactional Outbox
+
+DB のコミット後に送信すると、その間の停止や送信失敗で通知が失われます。先に送信する場合は、注文をロールバックしても通知を取り消せません。どちらも Dual Write の問題です。
+
+Transactional Outbox では、業務データと公開用 Integration Event を同じ DB の同じトランザクションで保存します。別の配送ワーカーが Outbox を読み、ブローカーに送ります。ロールバックすれば両方消え、コミットすれば配送待ちの記録が残ります。ただし、送信成功後に配送済みの記録を更新する前に停止すると、同じイベントを再送します。Outbox は配送を一度だけにする仕組みではありません。
+
+以下は PostgreSQL と Go の例です。SQL プレースホルダーは PostgreSQL 形式です。接続、DB ドライバー、認証、マイグレーションの設定はアプリケーションで用意します。
+
+```sql
+CREATE TABLE orders (
+    id text PRIMARY KEY,
+    customer_id text NOT NULL,
+    total_amount bigint NOT NULL CHECK (total_amount >= 0),
+    status text NOT NULL CHECK (status IN ('draft', 'confirmed'))
+);
+
+CREATE TABLE outbox (
+    event_id text PRIMARY KEY,
+    event_type text NOT NULL,
+    aggregate_id text NOT NULL,
+    payload jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    available_at timestamptz NOT NULL DEFAULT now(),
+    attempts integer NOT NULL DEFAULT 0,
+    lease_token text,
+    lease_until timestamptz,
+    published_at timestamptz,
+    dead_at timestamptz,
+    last_error text
+);
+CREATE INDEX outbox_pending ON outbox (available_at, created_at)
+    WHERE published_at IS NULL AND dead_at IS NULL;
+```
+
+イベント ID は新しい事実ごとに生成し、Outbox に保存した後は再送しても変えません。別の事実に同じ ID を使い回してはいけません。次の例は暗号学的乱数から ID を作ります。公開する項目と `v1` は外部契約であり、内部のドメインモデルとは独立して管理します。
+
+```go
+package delivery
+
+import (
+    "context"
+    "crypto/rand"
+    "database/sql"
+    "encoding/hex"
+    "encoding/json"
+    "fmt"
+)
+
+func newID() (string, error) {
+    var b [16]byte
+    if _, err := rand.Read(b[:]); err != nil {
+        return "", err
+    }
+    return hex.EncodeToString(b[:]), nil
+}
+
+type OrderConfirmedV1 struct {
+    EventID     string `json:"event_id"`
+    OrderID     string `json:"order_id"`
+    CustomerID  string `json:"customer_id"`
+    TotalAmount int64  `json:"total_amount"`
+}
+
+func Confirm(ctx context.Context, db *sql.DB, orderID string) error {
+    tx, err := db.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback()
+
+    var customerID string
+    var total int64
+    err = tx.QueryRowContext(ctx, `
+        UPDATE orders SET status = 'confirmed'
+        WHERE id = $1 AND status = 'draft'
+        RETURNING customer_id, total_amount`, orderID).Scan(&customerID, &total)
+    if err != nil {
+        return fmt.Errorf("注文を確定できません: %w", err)
+    }
+    id, err := newID()
+    if err != nil {
+        return err
+    }
+    body, err := json.Marshal(OrderConfirmedV1{id, orderID, customerID, total})
+    if err != nil {
+        return err
+    }
+    _, err = tx.ExecContext(ctx, `
+        INSERT INTO outbox (event_id, event_type, aggregate_id, payload)
+        VALUES ($1, 'order.confirmed.v1', $2, $3::jsonb)`, id, orderID, string(body))
+    if err != nil {
+        return err
+    }
+    return tx.Commit()
+}
+```
+
+`Commit` の応答が失われた場合は処理結果が不明です。呼び出し側の再試行には、後述の HTTP Idempotency Key など、別途コマンドの重複対策が必要です。イベント ID だけでは新しいリクエストによる二重実行を防げません。
+
+`Confirm` は、確定済みの注文に再度呼ぶと `sql.ErrNoRows` を返し、Outbox には記録しません。この性質は `TestConfirmWritesOrderAndOutboxTogether` で確認しています。ただし、commit の応答を失った呼び出し元は、この `ErrNoRows` を「すでに確定した」のか「確定できなかった」のか区別できません。区別が必要なら、結果を問い合わせる手段や HTTP Idempotency Key を使います。
+
+## 配送ワーカーと at-least-once
+
+複数ワーカーで同じ行を同時に取得しないよう、短い DB トランザクションで行をリースします。ネットワーク送信中は DB ロックを保持しません。下記は1件ずつ処理する例です。`Publish` は、ブローカー側で永続化されたことを確認する ACK を待ち、確認できない場合はエラーを返すアダプターです。ブローカーの永続化設定、購読、ACK と再配信の設定も必要です。単にクライアントの送信バッファへ入れるだけでは保証になりません。
+
+この `DispatchOne` と Outbox の SQL は [`idempotency/outbox.go`](https://github.com/135yshr/go-service-design-examples/blob/v1.0.0/idempotency/outbox.go) にあります。パッケージ名は `idempotency` で、同じパッケージの注文 ID 生成と名前が重なるため `newID` は `newEventID` にしています。SQL と処理の流れは本文と同じです。次の挙動を、実 PostgreSQL のテストで確認しています。
+
+- 複数のワーカーが同じ行を同時に取り出さないこと。`TestDispatchOneSkipsLockedRows` は、ロック中の行を飛ばすことを確かめます。`TestConcurrentDispatchersPublishEachEventOnce` は、4つのワーカーで30件を配送します。`TestLeasedRowIsNotTakenByAnotherWorker` は、送信中の行を取らないことを確かめます
+- 送信に失敗したとき、試行回数と次の試行時刻を記録すること（`TestPublishFailureSchedulesRetry`）
+- 上限回数で `dead_at` を設定し、取り出し対象から外すこと。`TestDispatchOneMarksDeadAfterMaxAttempts` と `TestPermanentErrorMarksDeadImmediately` で確かめています
+- 上限回数目の試行で結果を記録できず、リースが切れた行は、11回目を始めず `dead_at` を設定すること。`TestExpiredLeaseAtMaxAttemptsIsDeadLettered` は、リースが切れた行を直接用意します。`TestCanceledAtMaxAttemptsIsDeadLetteredAfterLeaseExpiry` は、Context の終了から再現します。上限の手前の行は取り直し、こちらは `TestExpiredLeaseBelowMaxAttemptsIsStillRetaken` で確かめます
+- リースが切れた行を別のワーカーが取り直し、旧ワーカーは結果を記録できないこと。`TestExpiredLeaseIsRetakenAndOldWorkerLosesLease` は、新しいワーカーが先に終わる場合です。`TestOldWorkerCannotMarkDeliveredWhileNewWorkerHoldsLease` は、旧ワーカーが先に戻る場合です
+
+リースの期限切れは、`lease_until` を過去に書き換えて再現しています。30秒の経過は待っていません。
+
+リースの期限には `clock_timestamp()` を使います。PostgreSQL の `now()` は、現在のトランザクションの開始時刻を返すためです。1文だけの自動コミットでも、その文が行ロックなどで待たされると、`now()` は待つ前の時刻のままです。`clock_timestamp()` は文の実行中も進む実際の現在時刻を返すため、リースを書き込む時点から数えられます。この違いは公式ドキュメントの記述に基づいており、ロック待ちが長引く状況を作ったテストは書いていません。
+
+上限回数の扱いにも注意します。呼び出し元の Context が終わるなどして結果を記録できなかった試行は、ブローカーが拒否したことを意味しません。結果が不明のまま試行だけが増え続けないよう、上限に達してリースが切れた行は、再送せずに `dead_at` を設定します。この行は人の判断に回し、送信されたかどうかをブローカー側で確認してから再投入します。確認できていないことは、章末の「検証の観点」にまとめています。
+
+```go
+package delivery
+
+import (
+    "context"
+    "database/sql"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "math/rand"
+    "time"
+)
+
+// maxAttempts は、配送を諦めて dead_at を設定するまでの試行回数です。
+const maxAttempts = 10
+
+type Message struct {
+    ID, Type, AggregateID string
+    Payload               json.RawMessage
+}
+
+type Broker interface {
+    // 永続化 ACK を確認した場合だけ nil を返します。
+    Publish(ctx context.Context, m Message) error
+}
+
+// Permanent はスキーマ不正など、再試行しても解決しないエラーです。
+type Permanent interface{ Permanent() bool }
+
+var ErrLeaseLost = errors.New("配送リースを失いました")
+
+func checkLease(result sql.Result, err error) error {
+    if err != nil {
+        return err
+    }
+    n, err := result.RowsAffected()
+    if err != nil {
+        return err
+    }
+    if n == 0 {
+        return ErrLeaseLost
+    }
+    return nil
+}
+
+func delay(attempt int) time.Duration {
+    capDelay := time.Second
+    for i := 1; i < attempt && capDelay < time.Minute; i++ {
+        capDelay *= 2
+        if capDelay > time.Minute {
+            capDelay = time.Minute
+        }
+    }
+    // full jitter: 0 から上限までの時間を選びます。
+    return time.Duration(rand.Int63n(int64(capDelay) + 1))
+}
+
+func DispatchOne(ctx context.Context, db *sql.DB, broker Broker) (bool, error) {
+    // リースが切れたまま上限回数に達した行は、再送せずに dead_at を設定します。
+    if _, err := db.ExecContext(ctx, `
+        UPDATE outbox SET dead_at = now(), lease_token = NULL, lease_until = NULL,
+                          last_error = 'lease expired at max attempts'
+        WHERE published_at IS NULL AND dead_at IS NULL
+          AND attempts >= $1 AND lease_until < now()`, maxAttempts); err != nil {
+        return false, err
+    }
+
+    token, err := newID()
+    if err != nil {
+        return false, err
+    }
+    var m Message
+    var attempts int
+    // lease_until は、行を書き込む時点から数えます。
+    err = db.QueryRowContext(ctx, `
+        UPDATE outbox SET lease_token = $1, lease_until = clock_timestamp() + interval '30 seconds',
+                          attempts = attempts + 1
+        WHERE event_id = (
+            SELECT event_id FROM outbox
+            WHERE published_at IS NULL AND dead_at IS NULL
+              AND available_at <= now() AND (lease_until IS NULL OR lease_until < now())
+            ORDER BY created_at, event_id
+            FOR UPDATE SKIP LOCKED LIMIT 1
+        )
+        RETURNING event_id, event_type, aggregate_id, payload, attempts`, token).
+        Scan(&m.ID, &m.Type, &m.AggregateID, &m.Payload, &attempts)
+    if errors.Is(err, sql.ErrNoRows) {
+        return false, nil
+    }
+    if err != nil {
+        return false, err
+    }
+
+    sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+    err = broker.Publish(sendCtx, m)
+    cancel()
+    if err == nil {
+        result, err := db.ExecContext(ctx, `
+            UPDATE outbox SET published_at = now(), lease_token = NULL, lease_until = NULL
+            WHERE event_id = $1 AND lease_token = $2 AND published_at IS NULL`,
+            m.ID, token)
+        return true, checkLease(result, err)
+    }
+    if ctx.Err() != nil {
+        return true, ctx.Err() // リースの期限切れ後に再試行します。
+    }
+    var permanent Permanent
+    dead := attempts >= maxAttempts || (errors.As(err, &permanent) && permanent.Permanent())
+    // エラー文字列には機密情報を含めず、サイズを制限します。
+    reason := "publish failed"
+    result, updateErr := db.ExecContext(ctx, `
+        UPDATE outbox SET lease_token = NULL, lease_until = NULL, last_error = $3,
+            dead_at = CASE WHEN $4 THEN now() ELSE NULL END,
+            available_at = now() + ($5 * interval '1 millisecond')
+        WHERE event_id = $1 AND lease_token = $2 AND published_at IS NULL`,
+        m.ID, token, reason, dead, delay(attempts).Milliseconds())
+    if updateErr = checkLease(result, updateErr); updateErr != nil {
+        return true, fmt.Errorf("配送失敗の記録: %w", updateErr)
+    }
+    return true, nil
+}
+```
+
+呼び出し側は `false` のとき短時間待機し、DB エラー時も backoff を設けます。リース時間は送信タイムアウトより長く設定し、長時間処理には更新機構を追加します。期限切れ後に旧ワーカーが復帰しても、トークンが変わっていれば旧ワーカーは状態を上書きできません。ただし旧ワーカーによる送信自体は止められず、重複します。成功 ACK の喪失も同様です。更新件数が0なら `ErrLeaseLost` を返すため、呼び出し側で `errors.Is` を使って検出し、監視します。
+
+再試行の待ち時間の上限は、1秒から倍々に増えて1分で止まります。実際の待ち時間は、0 から上限までの乱数です（full jitter）。1回目から12回目の失敗まで、待ち時間がこの範囲に収まることを `TestDelayIsFullJitterWithExponentialCap` で確認しています。
+
+永続化した未配送行を繰り返し処理し、ブローカーも永続化と再配信を適切に設定することで、障害回復後の at-least-once を目指します。無期限に配送を保証するものではありません。保存期間、ブローカーの耐久性、障害の復旧、DLQ の対応が前提です。
+
+## Consumer の冪等性
+
+Consumer は同じイベントを何度受け取っても、業務上の効果を一度だけ適用する必要があります。イベント ID に加え、独立して処理する Consumer 名をキーにします。重複判定と業務更新は Consumer 側の同一 DB トランザクションに入れます。
+
+```sql
+CREATE TABLE processed_events (
+    consumer text NOT NULL,
+    event_id text NOT NULL,
+    processed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (consumer, event_id)
+);
+CREATE TABLE point_accounts (
+    customer_id text PRIMARY KEY,
+    points bigint NOT NULL DEFAULT 0
+);
+```
+
+```go
+package delivery
+
+import (
+    "context"
+    "database/sql"
+    "encoding/json"
+    "errors"
+)
+
+// decodeOrderConfirmed は配送メッセージを業務上のイベントに戻します。
+func decodeOrderConfirmed(m Message) (OrderConfirmedV1, error) {
+    if m.Type != "order.confirmed.v1" {
+        return OrderConfirmedV1{}, errors.New("未対応のイベント種別です")
+    }
+    var e OrderConfirmedV1
+    if err := json.Unmarshal(m.Payload, &e); err != nil {
+        return OrderConfirmedV1{}, err
+    }
+    if e.EventID != m.ID {
+        return OrderConfirmedV1{}, errors.New("イベント ID が一致しません")
+    }
+    return e, nil
+}
+
+// ApplyPoints は、同じイベント ID の加算を、処理済みの記録と同じトランザクションで一度だけ適用します。
+// applied が false の場合は、処理済みのイベントです。
+func ApplyPoints(ctx context.Context, db *sql.DB, e OrderConfirmedV1) (applied bool, err error) {
+    if e.EventID == "" || e.CustomerID == "" || e.TotalAmount < 0 {
+        return false, errors.New("不正なイベントです")
+    }
+    tx, err := db.BeginTx(ctx, nil)
+    if err != nil {
+        return false, err
+    }
+    defer tx.Rollback()
+
+    result, err := tx.ExecContext(ctx, `
+        INSERT INTO processed_events (consumer, event_id) VALUES ('points-v1', $1)
+        ON CONFLICT DO NOTHING`, e.EventID)
+    if err != nil {
+        return false, err
+    }
+    n, err := result.RowsAffected()
+    if err != nil {
+        return false, err
+    }
+    if n == 0 {
+        return false, tx.Commit()
+    }
+    _, err = tx.ExecContext(ctx, `
+        INSERT INTO point_accounts (customer_id, points) VALUES ($1, $2)
+        ON CONFLICT (customer_id) DO UPDATE
+        SET points = point_accounts.points + EXCLUDED.points`,
+        e.CustomerID, e.TotalAmount/100)
+    if err != nil {
+        return false, err
+    }
+    return true, tx.Commit()
+}
+```
+
+上の関数は [`idempotency/consumer.go`](https://github.com/135yshr/go-service-design-examples/blob/v1.0.0/idempotency/consumer.go) と同じ重複判定の手順を、`OrderConfirmedV1` の項目で書いたものです。同じ内容は `ApplyPoints` のテスト（`TestApplyPointsIgnoresRedeliveredEvent` など）で検証しています。配送メッセージは `decodeOrderConfirmed` で変換してから渡します。
+
+Consumer はこの関数が成功してからブローカーへ ACK します。コミット後、ACK 前に停止すれば再配信されます。本書の実装では、処理済みの記録の主キー（`consumer` と `event_id`）が、同じイベントの2回目の処理を0行の INSERT にします。このとき加算は行いません。
+
+同じイベントが2つの Consumer へ同時に届いた場合は、後続の INSERT が先行の commit か rollback まで待ちます。先行が commit すれば後続は加算せず、rollback すれば後続が加算します。この挙動は2つのテストで確認しています。先行が commit する場合は `TestConcurrentApplyPointsAppliesOnce` です。rollback する場合は `TestConcurrentApplyPointsAfterRollbackAppliesFollower` です。
+
+業務更新の後に失敗した場合は、処理済みの記録も一緒にロールバックされ、再配信で処理できます。`TestApplyPointsRollsBackProcessedRecordWithBusinessUpdate` で確認しています。
+
+これらは、同じ DB と同じ Consumer 名での結果です。Consumer ごとに DB が別なら、この主キーでは重複を防げません。エラー時は ACK せず、ブローカーの再配信または DLQ 方針に従います。外部 API 呼び出しはこの DB トランザクションに含まれません。外部側の冪等キーや Consumer 側の別 Outbox が必要です。処理済み ID は、ブローカーの保持期間と DLQ に再投入できる期間を含む、最大の再配信期間より長く保持します。
+
+## HTTP Idempotency Key
+
+HTTP クライアントのタイムアウトでは、サーバーが処理済みか判断できません。クライアントは同じ操作の再試行に同じキーを使い、新しい操作には新しいキーを使います。キーは認証済み主体と操作にスコープし、同じキーで異なるリクエストを拒否します。イベント ID は配送の重複排除用で、HTTP キーとは役割が異なります。
+
+次は `READ COMMITTED` の PostgreSQL で、注文作成と保存済みレスポンスを同じトランザクションに記録する例です。キーの予約も同じトランザクション内で完結します。並行する同一キーの INSERT は、先行トランザクションが commit か rollback するまで待ちます。先行が commit していれば `ON CONFLICT` により 0 行となり、続く SELECT は新しい文のスナップショットで保存済みレスポンスを読みます。先行が rollback していれば、キーは残らないため後続が処理を続けます。
+
+この説明は、PostgreSQL 16 の公式ドキュメントの記述と、本書のサンプルでの確認結果に基づきます。公式ドキュメントによると、PostgreSQL の既定の分離レベルは `READ COMMITTED` です。この分離レベルでは、各文はその文の開始時点までに commit されたデータを見ます（MVCC のスナップショット）。一意インデックスへの挿入は、競合する行を未 commit のトランザクションが挿入していた場合、そのトランザクションの終了を待ちます。また、他のトランザクションの結果が INSERT のスナップショットから見えない場合があります。その状況で `ON CONFLICT DO NOTHING` が挿入しないのは、`READ COMMITTED` の場合だけだと明記されています。
+
+待ち方と読み取りの結果は分離レベルに依存し、`REPEATABLE READ` では同じ INSERT が直列化失敗（SQLSTATE `40001`）になります。そのためアプリケーション側で再試行が必要です。別のデータベースや分離レベルで同じ保証を前提にしてはいけません。待ち時間には、`lock_timeout` や `context` の期限で上限を設けます。サンプルとテストは [idempotency](https://github.com/135yshr/go-service-design-examples/tree/v1.0.0/idempotency) にあります。テストは PostgreSQL 16 の一時インスタンスを使い、commit 後・rollback 後の並行リクエストと、分離レベルごとの違いを確認しています。
+
+```sql
+CREATE TABLE http_requests (
+    principal text NOT NULL,
+    operation text NOT NULL,
+    idem_key text NOT NULL,
+    request_hash bytea NOT NULL,
+    response_status integer,
+    response_body bytea,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (principal, operation, idem_key)
+);
+```
+
+```go
+package delivery
+
+import (
+    "bytes"
+    "context"
+    "crypto/sha256"
+    "database/sql"
+    "encoding/json"
+    "errors"
+    "net/http"
+)
+
+var ErrKeyReuse = errors.New("同じキーに異なるリクエストが指定されました")
+
+// principal は認証済みの主体、body はサイズ制限と検証を済ませたリクエストです。
+func CreateOrder(ctx context.Context, db *sql.DB, principal, key string, body []byte) (int, []byte, error) {
+    if principal == "" || key == "" || len(key) > 200 {
+        return 0, nil, errors.New("主体またはキーが不正です")
+    }
+    var input struct {
+        CustomerID string `json:"customer_id"`
+        TotalAmount int64 `json:"total_amount"`
+    }
+    if err := json.Unmarshal(body, &input); err != nil {
+        return 0, nil, err
+    }
+    if input.CustomerID == "" || input.TotalAmount < 0 {
+        return 0, nil, errors.New("注文が不正です")
+    }
+    hash := sha256.Sum256(body)
+    tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+    if err != nil {
+        return 0, nil, err
+    }
+    defer tx.Rollback()
+    result, err := tx.ExecContext(ctx, `
+        INSERT INTO http_requests (principal, operation, idem_key, request_hash)
+        VALUES ($1, 'create-order', $2, $3) ON CONFLICT DO NOTHING`, principal, key, hash[:])
+    if err != nil {
+        return 0, nil, err
+    }
+    n, err := result.RowsAffected()
+    if err != nil {
+        return 0, nil, err
+    }
+    if n == 0 {
+        var storedHash, response []byte
+        var status int
+        err = tx.QueryRowContext(ctx, `
+            SELECT request_hash, response_status, response_body FROM http_requests
+            WHERE principal = $1 AND operation = 'create-order' AND idem_key = $2`,
+            principal, key).Scan(&storedHash, &status, &response)
+        if err != nil {
+            return 0, nil, err
+        }
+        if !bytes.Equal(storedHash, hash[:]) {
+            return 0, nil, ErrKeyReuse
+        }
+        return status, response, nil
+    }
+    id, err := newID()
+    if err != nil {
+        return 0, nil, err
+    }
+    _, err = tx.ExecContext(ctx, `
+        INSERT INTO orders (id, customer_id, total_amount, status) VALUES ($1, $2, $3, 'draft')`,
+        id, input.CustomerID, input.TotalAmount)
+    if err != nil {
+        return 0, nil, err
+    }
+    response, err := json.Marshal(struct {
+        OrderID string `json:"order_id"`
+    }{id})
+    if err != nil {
+        return 0, nil, err
+    }
+    _, err = tx.ExecContext(ctx, `
+        UPDATE http_requests SET response_status = $4, response_body = $5
+        WHERE principal = $1 AND operation = 'create-order' AND idem_key = $2
+          AND request_hash = $3`, principal, key, hash[:], http.StatusCreated, response)
+    if err != nil {
+        return 0, nil, err
+    }
+    if err = tx.Commit(); err != nil {
+        return 0, nil, err
+    }
+    return http.StatusCreated, response, nil
+}
+```
+
+HTTP ハンドラは `Idempotency-Key` ヘッダーを取得し、認証・認可を済ませ、本文のサイズを制限したうえで呼び出します。`ErrKeyReuse` は 409、検証エラーは 400、処理結果不明を含む一時障害は再試行可能なエラーとして返します。この例は生の本文をハッシュするため、空白などが違う本文も別リクエストです。正規化するならその規則を契約に含めます。必要なレスポンスヘッダーも保存し、キーの保持期間と期限切れ後の再利用規則を公開します。外部呼び出しをこのトランザクション内に追加しても原子性は得られません。
+
+commit は成功したのに、応答が呼び出し元へ届かない場合も、同じキーで再試行できます。アプリケーションが commit の後にエラーを返す形でこの状況を再現すると、再試行は保存済みのレスポンスを返し、注文は増えません。`TestCommittedButResponseLostRetryReturnsStoredResponse` で確認しています。同じキーで本文が違えば、保存済みのハッシュと一致せず `ErrKeyReuse` になります。commit の前に失敗した場合は、キーの予約も残らず、再試行で新しく処理されます。`TestNotCommittedRetryProcessesRequest` で確認しています。
+
+## retry、順序、DLQ の運用
+
+- retry: タイムアウトや一時的な接続障害は再試行します。指数 backoff と jitter で同時再試行を分散し、タイムアウト、上限回数、最大遅延を設定します。上の例の10回、最大1分は初期値であり、依存先の復旧時間と業務期限に合わせて調整します。認証・スキーマ不正などは原則として自動再試行しません。
+- 順序: 上の複数ワーカーと再試行は順序を保証しません。順序が必要なら、集約ごとの連番を状態変更と同一トランザクションで採番し、同じ集約を同じパーティションに送ります。配送側で前の未配送イベントを追い越させず、Consumer 側でも連番を検証し、欠番は保留・再取得します。DLQ に入った先行イベントが後続を止める場合の復旧方針も必要です。全体順序は別途設計します。
+- DLQ: 繰り返し失敗する poison message を隔離し、後続を無制限に止めないようにします。上の `dead_at` は送信側の DB 内の隔離場所です。Consumer 側でも、元のイベント ID、本文、失敗理由、試行回数を保持できる DLQ を用意します。DLQ への保存が確認できてから元メッセージを ACK し、保存失敗時は ACK しません。
+- 監視と復旧: 未配送件数、最古の未配送からの経過時間、配送失敗率、リース期限切れ、Consumer 遅延、DLQ 件数を監視します。たとえば配送遅延の目標を5分とし、最古の未配送が5分を超えたら通知します。目標と閾値は業務要件に合わせます。担当者は原因と契約・権限を確認し、修正後に同じ ID で再投入し、反映を確認します。個人情報の保持期間とアクセス権も定めます。
+
+再投入は、原因を直した後に `dead_at` を外し、`available_at` を現在に戻す運用で表せます。この更新の後、同じ ID のまま送られることを `TestDeadEventCanBeRequeuedWithSameID` で確認しています。ただし、この手順は `DispatchOne` の機能ではなく、運用の例です。
+
+`attempts` を戻さずに `dead_at` だけを外すと、次の失敗で再び `dead_at` が設定されます。再び試行の余地を与えるなら、`attempts` も 0 に戻します。どちらにするかは運用の判断で、2つの場合を `TestRequeuedEventKeepsAttemptsUnlessResetByOperator` で確かめています。
+
+再投入時に ID を変えると既存の重複排除を回避するため、原則として元の ID を保持します。内容の修正が必要なら、監査記録を残し、訂正イベントとして新しい ID を発行するかを業務上判断します。
+
+## Saga を選ぶとき
+
+複数サービスにまたがり、在庫確保、決済、配送手配のように各サービスのローカル処理を順に進める場合、1つの DB トランザクションでは全体を取り消せません。途中失敗時に予約解除や返金などの補償処理が必要で、途中状態と完了期限を追跡する必要があるなら Saga を検討します。
+
+各ステップ、タイムアウト、再試行、補償の失敗、担当者による介入を状態として永続化します。補償も通常の処理であり、必ず成功するロールバックではありません。返金済みと配送済みが同時に成立しないかなど、業務上の不変条件を確認します。単一サービスの処理や、独立した通知だけで済む場合は Saga を導入せず、ローカルトランザクションと Outbox で十分です。
+
+## 検証の観点
+
+実装時は、DB 更新後のロールバック、送信 ACK 後・配送済み記録前の停止、Consumer のコミット後・ACK 前の停止を障害注入で試します。サンプルの [idempotency](https://github.com/135yshr/go-service-design-examples/tree/v1.0.0/idempotency) では、次を実 PostgreSQL（PostgreSQL 16 の一時インスタンス）で確認しています。
+
+HTTP Idempotency Key については、次の点です。
+
+- 同一 HTTP キーと同一本文の逐次の再試行が、同じ注文を二重に作らず保存済みレスポンスを返すこと
+- 同一キーと異なる本文が `ErrKeyReuse` で拒否されること
+- 同一キーの並行リクエストが、先行の commit 後には保存済みレスポンスを、先行の rollback 後には後続の処理を得ること
+- commit の成功後に応答が届かなかった状況を、アプリケーション内で再現した場合に、同じキーと本文の再試行が保存済みレスポンスを返すこと
+
+Outbox と配送については、次の点です。
+
+- 注文の確定と Outbox への記録が、同じトランザクションで確定すること
+- 複数のワーカーが同じ行を同時に取り出さないこと、リースの期限切れ後に別のワーカーが取り直すこと、旧ワーカーが結果を記録できないこと
+- 送信失敗の記録、待ち時間の範囲、上限回数での `dead_at` の設定
+- 上限回数に達してリースが切れた行は、再送せず `dead_at` を設定すること
+
+Consumer については、次の点です。
+
+- 同じ `order.confirmed.v1` の逐次の再配信で、ポイントが1回だけ加算されること
+- 同じイベントが2つの Consumer へ同時に届いても、加算が1回であること。先行が rollback した場合は後続が加算すること
+- 業務更新の後に失敗すると、処理済みの記録もロールバックされること
+
+次の項目は確認できていません。
+
+- commit 応答の喪失を、ネットワークの切断としては再現していません。DB ドライバーが commit の結果を受け取る前に接続が切れると、commit の成否は呼び出し元から分かりません。その状況は試していません。commit が成功した場合と失敗した場合の状態は、それぞれ上のテストで確かめています。ただし、切断した接続の commit が再試行と並行して終わる組み合わせは試していません。
+- 実際のメッセージブローカーとの連携は試していません。テストの `Broker` は、本章のインターフェースを満たす代用品です。
+- 複数のプロセスで動かした場合は試していません。並行のテストは、同じプロセス内の複数の goroutine（別々の DB 接続）で行っています。
+- リースの更新、実際の時間経過（30秒と10秒）、Consumer 側の DLQ、順序の逆転、保持期間切れは試していません。
+- `clock_timestamp()` と `now()` の違いが表れる、長いロック待ちの状況は試していません。
+
+これらは実装時に追加して確かめてください。あわせて、復旧手順を定期的に演習します。
+
+## 参考文献
+
+| 内容 | 出典 |
+| --- | --- |
+| Transactional Outbox | Chris Richardson, [Transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html) |
+| 冪等な Consumer | Chris Richardson, [Idempotent consumer](https://microservices.io/patterns/communication-style/idempotent-consumer.html) |
+| Saga | Chris Richardson, [Saga](https://microservices.io/patterns/data/saga.html) |
+| backoff と jitter | AWS, [Exponential Backoff and Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) |
+| 分離レベルと `ON CONFLICT` の挙動 | PostgreSQL 16 Documentation, [13.2. Transaction Isolation](https://www.postgresql.org/docs/16/transaction-iso.html) |
+| `INSERT ... ON CONFLICT` | PostgreSQL 16 Documentation, [INSERT](https://www.postgresql.org/docs/16/sql-insert.html) |
+| 一意性検査と未 commit 行の待機 | PostgreSQL 16 Documentation, [64.5. Index Uniqueness Checks](https://www.postgresql.org/docs/16/index-unique-checks.html) |
+| `now()` と `clock_timestamp()` | PostgreSQL 16 Documentation, [9.9. Date/Time Functions and Operators](https://www.postgresql.org/docs/16/functions-datetime.html) |
+| MVCC の概要 | PostgreSQL 16 Documentation, [13.1. Introduction](https://www.postgresql.org/docs/16/mvcc-intro.html) |

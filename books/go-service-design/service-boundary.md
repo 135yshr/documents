@@ -89,16 +89,14 @@ internal/
 
 コード上の境界を保ちながら、デプロイ単位は1つにした構成を、ここではモジュラーモノリスと呼びます。
 
-```text
-                 1 process / 1 deployment
-
-┌─────────────────────────────────────────────┐
-│ BookLog                                     │
-│                                             │
-│  book ── reading ── review ── user          │
-│   │          │          │        │          │
-│ public API / event / explicit dependency    │
-└─────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph P[1 process / 1 deployment]
+        subgraph B[BookLog]
+            book --- reading --- review --- user
+            N[モジュール間は public API / event / explicit dependency でつなぐ]
+        end
+    end
 ```
 
 同一プロセスに置くことで、次の単純さを保てます。
@@ -136,11 +134,10 @@ type StartReadingInteractor struct {
 
 その場で結果を待たなくてよい副作用には、イベントが候補になります。
 
-```text
-reading: ReadingCompleted
-             │
-             ├──> review: レビュー依頼を準備
-             └──> user:   読了冊数を更新
+```mermaid
+graph LR
+    R[reading: ReadingCompleted] --> V[review: レビュー依頼を準備]
+    R --> U[user: 読了冊数を更新]
 ```
 
 ただし、同一プロセスのイベント配信と、別プロセスへの信頼できる配信は別物です。別プロセスへ届けると、保存と送信の二重書き、再送、重複、順序、停止中の consumer といった問題が発生します。これらは第19章で扱います。
@@ -173,22 +170,12 @@ reading: ReadingCompleted
 
 プロセスを分けると、関数呼び出しがネットワーク通信に変わります。
 
-```text
-関数呼び出し
-    ↓
-ネットワーク通信
-
-1つの DB transaction
-    ↓
-複数のローカルトランザクション
-
-即時整合性
-    ↓
-結果整合性を含む設計
-
-1つのデバッガ
-    ↓
-ログ・メトリクス・トレースによる追跡
+```mermaid
+graph LR
+    A[関数呼び出し] --> B[ネットワーク通信]
+    C[1つの DB transaction] --> D[複数のローカルトランザクション]
+    E[即時整合性] --> F[結果整合性を含む設計]
+    G[1つのデバッガ] --> H[ログ・メトリクス・トレースによる追跡]
 ```
 
 具体的には、次のコストが増えます。
@@ -223,34 +210,33 @@ reading: ReadingCompleted
 
 本書が勧める進め方は次の順序です。各段階で境界を確かめられるため、分割後の手戻りを減らせます。ただし、この順序が分割の成功を保証するわけではありません。
 
-```text
-レイヤーだけのモノリス
-        ↓
-機能単位のモジュールを作る
-        ↓
-モジュールの公開 API とデータ所有を明確にする
-        ↓
-同一プロセス内で境界を検証する
-        ↓
-独立性が必要なモジュールだけプロセスを分ける
+```mermaid
+graph TD
+    A[レイヤーだけのモノリス] --> B[機能単位のモジュールを作る]
+    B --> C[モジュールの公開 API とデータ所有を明確にする]
+    C --> D[同一プロセス内で境界を検証する]
+    D --> E[独立性が必要なモジュールだけプロセスを分ける]
 ```
 
 読書ログサービスなら、最初は `book`、`reading`、`review`、`user` を同一プロセスに置きます。たとえば将来、推薦処理にだけ大きな計算資源と独立したリリースサイクルが必要になったなら、その境界を抽出します。
 
-```text
-Before
-┌─────────────────────────────┐
-│ BookLog                     │
-│ book reading review user    │
-│ recommendation              │
-└─────────────────────────────┘
-
-After
-┌───────────────────────┐       ┌──────────────────────┐
-│ BookLog               │ event │ Recommendation       │
-│ book reading review   ├──────>│ Service              │
-│ user                  │       │                      │
-└───────────────────────┘       └──────────────────────┘
+```mermaid
+graph TB
+    subgraph B0[Before]
+        subgraph BL1[BookLog]
+            M1[book / reading / review / user / recommendation]
+        end
+    end
+    subgraph A0[After]
+        subgraph BL2[BookLog]
+            M2[book / reading / review / user]
+        end
+        subgraph RS[Recommendation Service]
+            M3[recommendation]
+        end
+        BL2 -->|event| RS
+    end
+    B0 ~~~ A0
 ```
 
 分割後も、元のモジュール境界が契約設計の出発点になります。モジュラーモノリスはマイクロサービスの失敗版ではなく、境界を低コストで検証する段階です。

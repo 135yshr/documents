@@ -233,14 +233,16 @@ internal/shared/
 
 モジュールが互いに自由に呼び合うと、package の循環 import を避けられても、設計上の循環依存ができます。
 
-```text
-book -> reading -> review -> book
+```mermaid
+graph LR
+    book --> reading --> review --> book
 ```
 
 まず、依存方向を一方向にできないか考えます。
 
-```text
-review -> reading -> book
+```mermaid
+graph LR
+    review --> reading --> book
 ```
 
 どうしても双方向の連携が必要なら、次を検討します。

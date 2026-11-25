@@ -259,9 +259,11 @@ type UserHandler struct {
 
 ただし、この構成では Handler 層がドメインモデル（`*model.User`）の構造を直接知ることになります。UseCase 層を挟むと、Handler 層は UseCase の Input/Output DTO だけに依存し、ドメインモデルの変更が Handler 層に波及しません。
 
-```text
-Handler → UseCase → Repository → Domain Model
-Handler層はUseCaseのDTOだけを知る
+```mermaid
+graph LR
+    H[Handler] -->|UseCase の DTO だけを知る| U[UseCase]
+    U --> R[Repository]
+    R --> D[Domain Model]
 ```
 
 Handler 層のテストでも、UseCase の振る舞いだけをモックすれば済みます。Input/Output DTO が変わらない限り、ドメインモデルの変更で Handler のテストは壊れにくくなります。
